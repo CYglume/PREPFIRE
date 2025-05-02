@@ -5,10 +5,6 @@ package:
   name: {{ name }}
   version: {{ version }}
 
-channels:
-  - conda-forge
-  - defaults
-
 source:
   path: .
   files:
@@ -26,22 +22,8 @@ requirements:
   host:
     - python>=3.10
     - pip
-    - numpy>=1.26
-    - pandas
-    - geopandas
-    - rasterio
-    - xarray
-    - netCDF4
-    - cdsapi
-    - scikit-learn
-    - shapely
-    - matplotlib
-    - wheel
     - setuptools
-    - pyproj
-    - zarr
-    - cftime
-    - h5netcdf 
+
   run:
     - python>=3.10
     - pip
@@ -63,23 +45,25 @@ requirements:
     - h5netcdf
 
 # Simplified test section - only imports check
-# test:
-#   imports:
-#     - scenfire
-#     - scenfire.core
-#     - scenfire.core.raster
-#     - scenfire.core.weather
-#     - scenfire.core.clustering
-#     - scenfire.pipeline
-#     - scenfire.utils
+test:
+  imports:
+    - scenfire
+  commands:
+    - pip check
+  requires:
+    - python 
+    - pip
+    - pytest
+    - pytest-cov
 
 about:
   home: https://github.com/CYglume/SCENFIRE
-  license: MIT
   summary: A Python package for fire simulation and analysis
   description: |
     SCENFIRE is a Python package for preparing materials for fire simulation and analysis, providing tools for processing fire data, 
     weather conditions, and landscape characteristics. The package implements a complete pipeline for fire risk assessment and simulation.
+  license: MIT
+  license_file: LICENSE
   dev_url: https://github.com/CYglume/SCENFIRE
   doc_url: https://github.com/CYglume/SCENFIRE#readme
   authors:
