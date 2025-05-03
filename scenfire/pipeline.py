@@ -69,7 +69,8 @@ class ScenFirePipeline:
     ├── input_data/
     │   └── region/
     │       ├── fires.shp
-    │       └── lcp_Fuel/
+    │       ├── lcp_Fuel/
+    │       └── cropping_polygon/ (optional bounding box)
     └── Processed_data/
         └── region/
     ```
@@ -107,8 +108,8 @@ class ScenFirePipeline:
             Root directory for the project. If not provided, the current working
             directory will be used.
         bound_coords : list of float, optional
-            Coordinates of the bounding box (xmin, ymin, xmax, ymax) in the output CRS.
-            If not provided, will be calculated from fire data.
+            Coordinates of the bounding box [xmin, ymin, xmax, ymax] in the output CRS.
+            If not provided, will be calculated from input cropping polygon or fire data (the least option).
         output_crs : str, optional
             Coordinate reference system for the output data. Default is "EPSG:3035"
             (ETRS89 / LAEA Europe).
@@ -205,6 +206,7 @@ class ScenFirePipeline:
         # Store intermediate results
         self.fires_gdf = None
         self.bound_extent = None
+        self.buffered_bound_extent = None
         self.fire_weather = None
         self.km_model = None
         self.ignition_file = None
@@ -233,15 +235,16 @@ class ScenFirePipeline:
         Returns
         -------
         None
-        """
-        if not os.path.exists(self.input_data_path):
-            os.makedirs(self.input_data_path, exist_ok=True)
-            logger.warning(f"Created input data directory: {self.input_data_path}")
-            
+        """            
         if not os.path.exists(os.path.join(self.input_data_path, "lcp_Fuel")):
             os.makedirs(os.path.join(self.input_data_path, "lcp_Fuel"), exist_ok=True)
             logger.warning(f"Created LCP fuel directory: {os.path.join(self.input_data_path, 'lcp_Fuel')}")
-            logger.warning("Please add input data files before running the pipeline")            
+            logger.warning("..Please add input data files before running the pipeline")
+
+        if not os.path.exists(os.path.join(self.input_data_path, "cropping_polygon")):
+            os.makedirs(os.path.join(self.input_data_path, "cropping_polygon"), exist_ok=True)
+            logger.warning(f"Created LCP fuel directory: {os.path.join(self.input_data_path, 'cropping_polygon')}")
+            logger.warning("..Cropping_polygon is optional for cropping the processing area by extra input file.")
     
     def _create_processed_directories(self):
         """
@@ -299,6 +302,7 @@ class ScenFirePipeline:
             If required columns are missing from the fire data
         """
         print(f"------ Processing fire ignition data ------")
+        # Check input fire historical data (vector file)
         fire_files = [f for f in os.listdir(self.input_data_path) if f.endswith(('.shp', '.gpkg'))]
         if not fire_files:
             raise FileNotFoundError(f"No shapefile found in {self.input_data_path}")
@@ -307,6 +311,7 @@ class ScenFirePipeline:
         
         fires_f = os.path.join(self.input_data_path, fire_files[0])
         self.fires_gdf = gpd.read_file(fires_f)
+        self.fires_gdf = self.fires_gdf.to_crs(crs=self.output_crs)
         logger.info(f"Loaded fire data from: {fires_f}")
         
         # Verify required columns exist
@@ -315,10 +320,33 @@ class ScenFirePipeline:
         if missing_columns:
             raise ValueError(f"Required columns not found in fire data: {', '.join(missing_columns)}")
         
+        ###
+        # Check extra input cropping polygon
+        if self.bound_coords is None:
+            # Only search for cropping polygon when no bounding coordinates input
+            bound_ply_files = [f for f in os.listdir(os.path.join(self.input_data_path, "cropping_polygon")) if f.endswith(('.shp', '.gpkg'))]
+            if bound_ply_files: 
+                # Case 1: using extra bound file
+                if len(bound_ply_files) > 1:
+                    raise ValueError(f"Found {len(bound_ply_files)} polygon file, which should be 1 only.")
+                else:
+                    # if detect cropping polygon file
+                    # Replace null bound_coords with the input polygon
+                    bound_ply_f = os.path.join(self.input_data_path, "cropping_polygon", bound_ply_files[0])
+                    self.bound_coords = gpd.read_file(bound_ply_f)
+                    self.bound_extent = self.bound_coords.iloc[0].geometry
+                    logger.info(f"Loaded bounding extent data from: {bound_ply_f}")
+            else: 
+                # Case 2: using boundary from fire historical vector
+                self.bound_extent = box(*self.fires_gdf.total_bounds)
+        else:
+            # Case 3: using manually input boundary
+            self.bound_extent = gpd.GeoDataFrame({'geometry': [box(*self.bound_coords)]}, crs="EPSG:4326").to_crs(crs=self.output_crs).iloc[0].geometry            
+
+        ###
         # Process fire data
-        self.bound_extent = get_bound_extent(self.bound_coords, self.fires_gdf, self.buffer_size)
-        self.fires_gdf = self.fires_gdf[self.fires_gdf.geometry.intersects(self.bound_extent)]
-        self.fires_gdf = self.fires_gdf.to_crs(crs=self.output_crs)
+        self.buffered_bound_extent = get_bound_extent(self.bound_coords, self.fires_gdf, self.buffer_size, self.output_crs)
+        self.fires_gdf    = self.fires_gdf[self.fires_gdf.geometry.intersects(self.buffered_bound_extent)]
         # Drop fid column if it exists for export to gpkg
         if 'fid' in self.fires_gdf.columns:
             self.fires_gdf = self.fires_gdf.drop(columns='fid')
@@ -354,7 +382,7 @@ class ScenFirePipeline:
             If fire data has not been processed or if no weather data was extracted
         """
         print(f"------ Processing Weather Data ------")
-        if self.fires_gdf is None or self.bound_extent is None:
+        if self.fires_gdf is None or self.buffered_bound_extent is None:
             raise ValueError("Fire data not processed. Call process_fire_data() first.")
         self.fires_gdf_WGS84 = self.fires_gdf.to_crs(epsg=4326)
         logger.info("CRS for fire gdf changed to EPSG:4326! (matching CDS)")
@@ -379,7 +407,7 @@ class ScenFirePipeline:
                     self.fires_gdf_WGS84,
                     self.col_fire_date,
                     self.processed_data_path,
-                    self.bound_extent,
+                    self.buffered_bound_extent,
                     self.output_crs,
                     self.cds_api_key,
                     fetch=True,
@@ -555,7 +583,7 @@ class ScenFirePipeline:
             If required raster files are not found or if the LCP file is not created
         """
         print(f"------ Processing landscape data ------")
-        if self.bound_extent is None:
+        if self.buffered_bound_extent is None:
             raise ValueError("Bound extent not defined. Call process_fire_data() first.")
         
         try:
@@ -574,7 +602,7 @@ class ScenFirePipeline:
             
             # Create GeoDataFrame with bounding box
             gdf_bbox = gpd.GeoDataFrame(
-                geometry=[self.bound_extent],
+                geometry=[self.buffered_bound_extent],
                 crs=self.output_crs
             )
             
@@ -753,6 +781,7 @@ def setup_project_structure(region, root_dir=None):
     ├── input_data/
     │   └── region/
     │       └── lcp_Fuel/
+    │       └── cropping_polygon/ (optional bounding box)
     └── Processed_data/
     ```
     
@@ -778,7 +807,8 @@ def setup_project_structure(region, root_dir=None):
         os.path.join(root_dir, "input_data"),
         os.path.join(root_dir, "Processed_data"),
         os.path.join(root_dir, "input_data", region),
-        os.path.join(root_dir, "input_data", region, "lcp_Fuel")
+        os.path.join(root_dir, "input_data", region, "lcp_Fuel"),
+        os.path.join(root_dir, "input_data", region, "cropping_polygon")
     ]
     
     for dir_path in dirs:
