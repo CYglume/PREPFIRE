@@ -345,7 +345,7 @@ class ScenFirePipeline:
 
         ###
         # Process fire data
-        self.buffered_bound_extent = get_bound_extent(self.bound_coords, self.fires_gdf, self.buffer_size, self.output_crs)
+        self.buffered_bound_extent = get_bound_extent(self.bound_coords, self.fires_gdf, self.output_crs, self.buffer_size)
         self.fires_gdf    = self.fires_gdf[self.fires_gdf.geometry.intersects(self.buffered_bound_extent)]
         # Drop fid column if it exists for export to gpkg
         if 'fid' in self.fires_gdf.columns:

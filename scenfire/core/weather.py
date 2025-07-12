@@ -67,46 +67,46 @@ def get_bound_extent(bound_box: list[float] | tuple[float, float, float, float] 
         raise ValueError("CRS of Bounding GeoDataFrame or Fire GeoDataFrame must be non-geographic for better buffering.")
 
     # Create bounding box
-    if bound_box:
-        ## Direct buffer with GeoDataFrame bounding
-        if isinstance(bound_box, gpd.GeoDataFrame):
-            bound_box = bound_box.to_crs(crs=output_crs)
+    ## Direct buffer with bounding in different types
+    if isinstance(bound_box, gpd.GeoDataFrame):
+        bound_box = bound_box.to_crs(crs=output_crs)
 
-            # Check if multiple geometry input
-            if bound_box.count_geometries().sum() != 1:
-                raise ValueError("Bounding box should have only one polygon feature.")
-            if bound_box.geometry.type[0] != "Polygon":
-                raise ValueError("Bounding box should have only one polygon feature.")
-            
-            # Calculating buffer
-            bound_extent = bound_box.buffer(buffer_size).iloc[0]
-        else:                
-            ## Buffering from given coordinates (crs is geopraphic)
-            # Verify provided coordinates are valid
-            if len(bound_box) != 4:
-                raise ValueError("Provided coordinates must be a tuple of 4 floats (xmin, ymin, xmax, ymax)")
-            # Check correct order of coordinates
-            if bound_box[0] > bound_box[2] or bound_box[1] > bound_box[3]:
-                raise ValueError("Provided coordinates are not in the correct order (xmin, ymin, xmax, ymax)")
-            if any([i > 180 for i in bound_box]):
-                raise ValueError(f"Provided coordinates must be in degree. Got array: {bound_box}")
-            # Calculate buffer depending on the CRS
-            if gdf.crs.is_geographic:
-                # Calculate buffer size in degrees based on latitude
-                center_lat = (bound_box[1] + bound_box[3]) / 2
-                # Length of 1 degree of longitude at this latitude
-                lon_degree_length = math.cos(math.radians(center_lat)) * 111320
-                # Convert buffer from meters to degrees
-                buffer_size_x = buffer_size / lon_degree_length  # longitude buffer
-                buffer_size_y = buffer_size / 111320  # latitude buffer (1 degree = ~111.32km)
-            
-            # Create bounding box from provided coordinates
-            b_box = box(bound_box[0] - buffer_size_x,
-                        bound_box[1] - buffer_size_y,
-                        bound_box[2] + buffer_size_x,
-                        bound_box[3] + buffer_size_y)
-            bound_extent = gpd.GeoDataFrame({'geometry': [b_box]}, crs="EPSG:4326").to_crs(crs=output_crs).iloc[0].geometry
+        # Check if multiple geometry input
+        if bound_box.count_geometries().sum() != 1:
+            raise ValueError("Bounding box should have only one polygon feature.")
+        if bound_box.geometry.type[0] != "Polygon":
+            raise ValueError("Bounding box should have only one polygon feature.")
+        
+        # Calculating buffer
+        bound_extent = bound_box.buffer(buffer_size).iloc[0]
+    elif isinstance(bound_box, list | tuple):                
+        ## Buffering from given coordinates (crs is geopraphic)
+        # Verify provided coordinates are valid
+        if len(bound_box) != 4:
+            raise ValueError("Provided coordinates must be a list/tuple of 4 floats (xmin, ymin, xmax, ymax)")
+        # Check correct order of coordinates
+        if bound_box[0] > bound_box[2] or bound_box[1] > bound_box[3]:
+            raise ValueError("Provided coordinates are not in the correct order (xmin, ymin, xmax, ymax)")
+        if any([i > 180 for i in bound_box]):
+            raise ValueError(f"Provided coordinates must be in degree. Got array: {bound_box}")
+        # Calculate buffer depending on the CRS
+        if gdf.crs.is_geographic:
+            # Calculate buffer size in degrees based on latitude
+            center_lat = (bound_box[1] + bound_box[3]) / 2
+            # Length of 1 degree of longitude at this latitude
+            lon_degree_length = math.cos(math.radians(center_lat)) * 111320
+            # Convert buffer from meters to degrees
+            buffer_size_x = buffer_size / lon_degree_length  # longitude buffer
+            buffer_size_y = buffer_size / 111320  # latitude buffer (1 degree = ~111.32km)
+        
+        # Create bounding box from provided coordinates
+        b_box = box(bound_box[0] - buffer_size_x,
+                    bound_box[1] - buffer_size_y,
+                    bound_box[2] + buffer_size_x,
+                    bound_box[3] + buffer_size_y)
+        bound_extent = gpd.GeoDataFrame({'geometry': [b_box]}, crs="EPSG:4326").to_crs(crs=output_crs).iloc[0].geometry
     else:
+        # Any undefined input: use the extent of input gdf
         # Get bounding box from fire point vector
         xmin, ymin, xmax, ymax = gdf.total_bounds
         # Apply buffer in projected units (meters)
