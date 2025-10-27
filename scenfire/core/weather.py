@@ -43,7 +43,7 @@ def get_bound_extent(bound_box: list[float] | tuple[float, float, float, float] 
     Returns
     -------
     Polygon
-        A rectangular polygon (shapely.geometry.polygon.Polygon) representing the buffered extent
+        A rectangular polygon (shapely.geometry.polygon.Polygon) representing the buffered extent (no crs included)
         
     Raises
     ------
@@ -62,9 +62,6 @@ def get_bound_extent(bound_box: list[float] | tuple[float, float, float, float] 
     if gdf.crs != output_crs:
         gdf = gdf.to_crs(crs=output_crs)
     
-    # Check CRS
-    if bound_box.crs.is_geographic and gdf.crs.is_geographic:
-        raise ValueError("CRS of Bounding GeoDataFrame or Fire GeoDataFrame must be non-geographic for better buffering.")
 
     # Create bounding box
     ## Direct buffer with bounding in different types
@@ -89,16 +86,15 @@ def get_bound_extent(bound_box: list[float] | tuple[float, float, float, float] 
             raise ValueError("Provided coordinates are not in the correct order (xmin, ymin, xmax, ymax)")
         if any([i > 180 for i in bound_box]):
             raise ValueError(f"Provided coordinates must be in degree. Got array: {bound_box}")
-        # Calculate buffer depending on the CRS
-        if gdf.crs.is_geographic:
-            # Calculate buffer size in degrees based on latitude
-            center_lat = (bound_box[1] + bound_box[3]) / 2
-            # Length of 1 degree of longitude at this latitude
-            lon_degree_length = math.cos(math.radians(center_lat)) * 111320
-            # Convert buffer from meters to degrees
-            buffer_size_x = buffer_size / lon_degree_length  # longitude buffer
-            buffer_size_y = buffer_size / 111320  # latitude buffer (1 degree = ~111.32km)
-        
+
+        # Calculate buffer size in degrees based on latitude
+        center_lat = (bound_box[1] + bound_box[3]) / 2
+        # Length of 1 degree of longitude at this latitude
+        lon_degree_length = math.cos(math.radians(center_lat)) * 111320
+        # Convert buffer from meters to degrees
+        buffer_size_x = buffer_size / lon_degree_length  # longitude buffer
+        buffer_size_y = buffer_size / 111320  # latitude buffer (1 degree = ~111.32km)
+
         # Create bounding box from provided coordinates
         b_box = box(bound_box[0] - buffer_size_x,
                     bound_box[1] - buffer_size_y,
@@ -149,7 +145,7 @@ def get_fire_weather(x, fires, raster, col_fire_date: str, in_cds_time="valid_ti
     date = pd.to_datetime(fire[col_fire_date])
     return raster.sel(**{in_cds_time: date}, method='nearest').sel(**{in_x:fire.geometry.x, in_y:fire.geometry.y}, method="nearest").squeeze()
 
-def download_weather_data(gdf, date_column, processed_path, bound_extent, bound_crs, cdsAPI_KEY, fetch=True,
+def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bound_crs, cdsAPI_KEY, fetch=True,
                            time_of_day = ['12:00'], fire_months=[5,6,7,8,9,10]):
     """
     Downloads ERA5-Land weather data from the Copernicus Climate Data Store (CDS) API.
@@ -162,10 +158,10 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent, bound_
         Column name in gdf containing the fire dates
     processed_path : str
         Path to save the downloaded weather data
-    bound_extent : shapely.geometry.Polygon
+    bound_extent_ply : shapely.geometry.Polygon
         Bounding box polygon for the area of interest
     bound_crs : str or pyproj.CRS
-        Coordinate reference system of the bound_extent
+        Coordinate reference system of the bound_extent_ply
     cdsAPI_KEY : str
         API key for the Copernicus Climate Data Store
     fetch : bool, optional (default=True)
@@ -195,7 +191,7 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent, bound_
     t = gdf[date_column].tolist()
     date_range = [min(t).strftime("%Y-%m-%d"), max(t).strftime("%Y-%m-%d")]
 
-    bounds_wgs = gpd.GeoDataFrame({'geometry': [bound_extent]}, crs=bound_crs)
+    bounds_wgs = gpd.GeoDataFrame({'geometry': [bound_extent_ply]}, crs=bound_crs)
     bounds_wgs = bounds_wgs.to_crs(epsg=4326).total_bounds
     # Reorder to CDS format [ymax, xmin, ymin, xmax]
     area_extract_cds = [bounds_wgs[3], bounds_wgs[0], bounds_wgs[1], bounds_wgs[2]]

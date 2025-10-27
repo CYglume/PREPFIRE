@@ -322,6 +322,8 @@ class ScenFirePipeline:
         
         ###
         # Check extra input cropping polygon
+        # bound_coord (gpd, list, tuple, None) will be used to generate buffered_bound
+        # bound_extent (should be geoDataFrame) will be used to generate new ignition points
         if self.bound_coords is None:
             # Only search for cropping polygon when no bounding coordinates input
             bound_ply_files = [f for f in os.listdir(os.path.join(self.input_data_path, "cropping_polygon")) if f.endswith(('.shp', '.gpkg'))]
@@ -334,19 +336,19 @@ class ScenFirePipeline:
                     # Replace null bound_coords with the input polygon
                     bound_ply_f = os.path.join(self.input_data_path, "cropping_polygon", bound_ply_files[0])
                     self.bound_coords = gpd.read_file(bound_ply_f)
-                    self.bound_extent = self.bound_coords.iloc[0].geometry
+                    self.bound_extent = self.bound_coords
                     logger.info(f"Loaded bounding extent data from: {bound_ply_f}")
             else: 
                 # Case 2: using boundary from fire historical vector
-                self.bound_extent = box(*self.fires_gdf.total_bounds)
+                self.bound_extent = gpd.GeoDataFrame({'geometry': [box(*self.fires_gdf.total_bounds)]}, crs=self.fires_gdf.crs).to_crs(crs=self.output_crs)
         else:
             # Case 3: using manually input boundary
-            self.bound_extent = gpd.GeoDataFrame({'geometry': [box(*self.bound_coords)]}, crs="EPSG:4326").to_crs(crs=self.output_crs).iloc[0].geometry            
+            self.bound_extent = gpd.GeoDataFrame({'geometry': [box(*self.bound_coords)]}, crs="EPSG:4326").to_crs(crs=self.output_crs)
 
         ###
         # Process fire data
         self.buffered_bound_extent = get_bound_extent(self.bound_coords, self.fires_gdf, self.output_crs, self.buffer_size)
-        self.fires_gdf    = self.fires_gdf[self.fires_gdf.geometry.intersects(self.buffered_bound_extent)]
+        self.fires_gdf    = self.fires_gdf[self.fires_gdf.intersects(self.buffered_bound_extent)]
         # Drop fid column if it exists for export to gpkg
         if 'fid' in self.fires_gdf.columns:
             self.fires_gdf = self.fires_gdf.drop(columns='fid')
