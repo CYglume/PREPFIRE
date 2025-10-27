@@ -268,18 +268,20 @@ def produce_fms(fuel_raster_path, weather_dir, fms_out_dir):
         print(f"Using weather type file: {weather_type_path}")
         write_fms(weather_type_path, fms_out_dir, fuels, wtype)
 
-def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster):
+def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster, KDE_bw = 0.1):
     """
     Produce an ignition probability raster using Kernel Density Estimation.
     
     Parameters
     ----------
     fires_f : str
-        Path to fire locations shapefile
+        Path to historical fire ignition locations shapefile
     template_raster_path : str
         Path to template raster file
     output_raster : str
         Path to output raster file
+    KDE_bw : float, optional (default=0.1)
+        Band-width for smoothing band width in Gaussain KDE (smaller for more sensitive)
 
     Returns
     -------
@@ -289,16 +291,16 @@ def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster):
     Notes
     -----
     This function:
-    1. Loads fire locations from a shapefile
+    1. Loads historical fire ignition locations from a shapefile
     2. Creates a coordinate grid based on the template raster
-    3. Applies Kernel Density Estimation to the fire locations
+    3. Applies Kernel Density Estimation to the historical fire ignition locations
     4. Normalizes the probability values to the range [0, 1]
     5. Saves the result as a raster file
     
     The bandwidth for the KDE is set to 0.1, which can be adjusted as needed.
     """
     # Step 1: Load and prepare input data
-    # Read fire locations shapefile and template raster parameters
+    # Read historical fire ignition locations shapefile and template raster parameters
     gdf = gpd.read_file(fires_f)
     
     with rasterio.open(template_raster_path) as src:
@@ -307,7 +309,7 @@ def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster):
         res_x, res_y = src.res
         width, height = src.width, src.height
 
-    # Reproject fire locations if needed
+    # Reproject historical fire ignition locations if needed
     if gdf.crs != raster_crs:
         gdf = gdf.to_crs(raster_crs)
 
@@ -326,7 +328,7 @@ def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster):
         raise ValueError("At least two points are required for KDE")
 
     # Step 4: Apply KDE and evaluate on grid
-    kde = gaussian_kde(xy, bw_method=0.1)  # Bandwidth can be adjusted as needed
+    kde = gaussian_kde(xy, bw_method=KDE_bw)  # Bandwidth can be adjusted as needed
     Z = kde(np.vstack([X.ravel(), Y.ravel()]))
     Z = Z.reshape(Y.shape)
 

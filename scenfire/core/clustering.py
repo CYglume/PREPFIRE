@@ -193,68 +193,104 @@ def output_weather_types(fire_weather, weather_dir, km, n_max, col_fire_size, ex
     print("\n--> Weather data done")
 
 
-def generate_sample_ignition_points(bound_extent, bound_crs, sampletxt_output_filename, out_crs = None, num_points = 500000):
+def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_filename, out_crs = None, num_points = 500000):
     """
-    Generates random ignition points within a bounding box and exports them to a CSV file.
-    
+    Generates random ignition points strictly within the *actual geometry* of a boundary layer
+    (Polygon or MultiPolygon) and exports them to a CSV file.
+
     Parameters
     ----------
-    bound_extent : shapely.geometry
-        Geometry defining the bounding box extent
+    bound_geometry : shapely.geometry.Polygon or shapely.geometry.MultiPolygon
+        Geometry defining the boundary within which to generate points (e.g., a country, park).
+        It must be a Shapely Polygon or MultiPolygon object.
     bound_crs : str
-        Coordinate reference system of the bounding box
+        Coordinate reference system (CRS) of the `bound_geometry` (e.g., "EPSG:4326", "EPSG:32630").
     sampletxt_output_filename : str
-        Path to output CSV file
-    out_crs : str, optional (default=None)
-        Output coordinate reference system. If None, uses bound_crs
-    num_points : int, optional (default=500000)
-        Number of random points to generate
-        
+        Path to the output CSV file where the ignition points will be saved.
+    out_crs : str, optional
+        Output coordinate reference system (CRS) for the points in the CSV file.
+        If `None` (default), the points will retain the `bound_crs`.
+    num_points : int, optional
+        The total number of random points to generate *within the actual boundary*.
+        Defaults to 500,000.
+
     Returns
     -------
     None
-        Exports points to CSV file with FIRE_NUM, XStart, YStart columns
-        
+        This function does not return any value. It exports the generated points
+        to the specified CSV file.
+
     Notes
     -----
     This function:
-    1. Creates a GeoDataFrame with the bounding box geometry
-    2. Generates random points within the bounding box
-    3. Optionally reprojects the points to a different coordinate system (output CRS)
-    4. Assigns a unique identifier to each point
-    5. Exports the points to a CSV file
-    
+    1. Validates that `bound_geometry` is a Polygon or MultiPolygon.
+    2. Creates a GeoDataFrame representing the precise boundary using `bound_geometry` and `bound_crs`.
+    3. Checks if the `sampletxt_output_filename` already exists. If it does, the function
+       will print a message and exit without overwriting the file.
+    4. Leverages `geopandas.GeoSeries.sample_points(num_points)` to efficiently generate
+       random points that are uniformly distributed *within the area* of the `bound_geometry`.
+       This method handles the underlying point-in-polygon tests, ensuring points are truly inside.
+    5. The resulting MultiPoint geometries from `sample_points()` are then 'exploded'
+       into individual Point geometries, creating a GeoDataFrame where each row represents
+       a single ignition point.
+    6. If the requested `num_points` is very large relative to the geometry's size,
+       or if the geometry is invalid/empty, `sample_points()` might generate fewer
+       points than requested. A warning is printed in such cases.
+    7. Optionally reprojects the generated points to the `out_crs` if specified
+       and if it differs from `bound_crs`.
+    8. Assigns a unique identifier (`FIRE_NUM`) to each point.
+    9. Extracts the X and Y coordinates of each point into `XStart` and `YStart` columns.
+    10. Exports the points to the CSV file, containing only the 'FIRE_NUM', 'XStart',
+        and 'YStart' columns, without the GeoDataFrame index.
+
     The output CSV file contains three columns:
-    - FIRE_NUM: Unique identifier for each ignition point
-    - XStart: X-coordinate of the ignition point
-    - YStart: Y-coordinate of the ignition point
-    
-    If the output file already exists, the function will not overwrite it.
+    - FIRE_NUM: Unique sequential identifier for each ignition point (integer).
+    - XStart: X-coordinate of the ignition point (float).
+    - YStart: Y-coordinate of the ignition point (float).
     """
-    # Create layer with boundaries
-    gdf_bbox = gpd.GeoDataFrame(geometry=[bound_extent], crs=bound_crs)
+    # 3. Check if output file already exists to prevent accidental overwrites
+    if os.path.exists(sampletxt_output_filename):
+        print(f"Output file '{sampletxt_output_filename}' already exists. Skipping generation.")
+        print("--> Fire ignition points done")
+        return
 
-    # Extract bbox limits from GeoDataFrame
-    minx, miny, maxx, maxy = gdf_bbox.total_bounds  # returns (minx, miny, maxx, maxy)
+    # 4. Generate random points within the polygon using sample_points()
+    try:
+        # sample_points() returns a GeoSeries where each entry is a MultiPoint containing 'n' points
+        # for the corresponding input geometry.
+        # sampled_points_multipoint_series = bound_geometry.geometry.sample_points(num_points)
+        gdf_boundary = gpd.GeoDataFrame(geometry=[bound_geometry], crs=bound_crs)
+        foo_multipoint_series = gdf_boundary.geometry.sample_points(500000)
 
-    if not os.path.exists(sampletxt_output_filename):
-        # Generate random points within bbox
-        x_coords = np.random.uniform(minx, maxx, num_points)
-        y_coords = np.random.uniform(miny, maxy, num_points)
-        points = [Point(x, y) for x, y in zip(x_coords, y_coords)]
+    except Exception as e:
+        print(f"Error generating points with sample_points(): {e}")
+        print("This might happen if the geometry is invalid or too small to generate the requested number of points.")
+        print("--> Fire ignition points failed")
+        return
 
-        # Create GeoDataFrame with points
-        gdf_points = gpd.GeoDataFrame(geometry=points, crs=bound_crs)
-        if out_crs is not None:
-            gdf_points = gdf_points.to_crs(crs=out_crs)
 
-        # Create FIRE_NUM, XStart and YStart columns
-        gdf_points['FIRE_NUM'] = range(1, len(gdf_points) + 1)
-        gdf_points['XStart'] = gdf_points.geometry.x
-        gdf_points['YStart'] = gdf_points.geometry.y
+    # Create GeoDataFrame with points
+    gdf_points = gpd.GeoDataFrame(
+        geometry=foo_multipoint_series.explode(ignore_index=True),
+        crs=bound_crs
+    )
 
-        # Export to CSV file
-        gdf_points[['FIRE_NUM', 'XStart', 'YStart']].to_csv(sampletxt_output_filename, index=False)
-    print("Sampled csv file exported")
-    print("--> Fire ignition points done")
+    # Check if fewer points than requested were generated
+    if len(gdf_points) < num_points:
+        print(f"Warning: Only {len(gdf_points)} points were generated by sample_points(), instead of the requested {num_points}.")
 
+    # 6. Reproject to output CRS if specified
+    if out_crs is not None and gdf_points.crs != out_crs:
+        print(f"Reprojecting points from {gdf_points.crs.to_string()} to {out_crs}...")
+        gdf_points = gdf_points.to_crs(crs=out_crs)
+
+    # 7. Create FIRE_NUM, XStart, and YStart columns (maintaining exact output format)
+    gdf_points['FIRE_NUM'] = range(1, len(gdf_points) + 1)
+    gdf_points['XStart'] = gdf_points.geometry.x
+    gdf_points['YStart'] = gdf_points.geometry.y
+
+    # 8. Export to CSV file with the required columns
+    gdf_points[['FIRE_NUM', 'XStart', 'YStart']].to_csv(sampletxt_output_filename, index=False)
+    
+    print("Sampled CSV file exported.")
+    print("--> Fire ignition points done.")
