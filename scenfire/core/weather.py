@@ -371,45 +371,6 @@ def weather_data_processing(weather_dir, in_cds_time="valid_time", in_cds_x = 'l
         plt.show()
     return save_weather_data(weather_data, weather_dir, in_cds_time)
 
-def save_weather_data(weather_data, weather_dir, in_cds_time="valid_time"):
-    """
-    Internal function to save processed weather data to NetCDF files.
-    Save processed weather data to NetCDF files.
-    
-    Parameters
-    ----------
-    weather_data : dict
-        Dictionary containing weather variables and metadata from weather_data_processing()
-    weather_dir : str
-        Directory to save the output files
-    in_cds_time : str, optional (default="valid_time")
-        Name of the time dimension in the NetCDF files
-        
-    Returns
-    -------
-    dict
-        Dictionary of saved file paths for each weather variable
-    """
-    print("Saving weather data...")
-    metadata = weather_data['metadata']
-    saved_files = {}
-    
-    for var_name, data in weather_data.items():
-        if var_name == 'metadata':
-            continue
-            
-        ds = data
-        output_file = os.path.join(weather_dir, f"{var_name}.nc")
-        if os.path.exists(output_file):
-            os.remove(output_file)  # Delete the file
-        ds.to_netcdf(output_file)
-        ds.close()
-        saved_files[var_name] = output_file
-    
-    print("Weather data saved")
-    print(saved_files)
-    return saved_files
-
 def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_column = 'Year', **kwargs):
     """
     Extract weather data at fire locations and dates from NetCDF files.
@@ -479,3 +440,43 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
                        sep=';', decimal=',', index=False)
     
     return fire_weather 
+
+# Internal function
+def save_weather_data(weather_data, weather_dir, in_cds_time="valid_time"):
+    """
+    Internal function to save processed weather data to NetCDF files.
+    Save processed weather data to NetCDF files.
+    
+    Parameters
+    ----------
+    weather_data : dict
+        Dictionary containing weather variables and metadata from weather_data_processing()
+    weather_dir : str
+        Directory to save the output files
+    in_cds_time : str, optional (default="valid_time")
+        Name of the time dimension in the NetCDF files
+        
+    Returns
+    -------
+    dict
+        Dictionary of saved file paths for each weather variable
+    """
+    print("Saving weather data...")
+    metadata = weather_data['metadata']
+    saved_files = {}
+    
+    for var_name, data in weather_data.items():
+        if var_name == 'metadata':
+            continue
+            
+        ds = data
+        output_file = os.path.join(weather_dir, f"{var_name}.nc")
+        if os.path.exists(output_file):
+            os.remove(output_file)  # Delete the file
+        ds.to_netcdf(output_file)
+        ds.close()
+        saved_files[var_name] = output_file
+    
+    print("Weather data saved")
+    print(saved_files)
+    return saved_files

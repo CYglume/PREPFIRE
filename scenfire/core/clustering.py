@@ -65,7 +65,7 @@ def cluster_fire_weather(fire_weather, min_n=4, max_n=10):
 
     return km
 
-def output_weather_types(fire_weather, weather_dir, km, n_max, col_fire_size, extreme_percentile):
+def output_weather_types(fire_weather, weather_dir, km, col_fire_size, extreme_percentile):
     """
     Generate extreme and average weather type summaries from clustered fire weather data.
     
@@ -77,119 +77,69 @@ def output_weather_types(fire_weather, weather_dir, km, n_max, col_fire_size, ex
         Directory to save the output files
     km : sklearn.cluster.KMeans
         Fitted KMeans clustering model
-    n_max : int
-        Maximum number of clusters
     col_fire_size : str
         Column name for fire size
-    extreme_percentile : int
-        Percentile for extreme weather types (e.g., 95 for 95th percentile)
+    extreme_percentile : int | tuple | list
+        int: Percentile for extreme weather types (e.g., 95 for 95th percentile) \\
+        tuple | list: List of percentiles to generate mean weather types within each percentile interval
 
     Returns
     -------
     None
-        Saves two CSV files to the specified directory:
-        - extreme_weather_types.csv: Contains extreme weather conditions for each cluster
-        - mean_weather_types.csv: Contains average weather conditions for each cluster
+        Saves two CSV files based on extreme_percentile:\\
+        extreme_percentile: int
+        - pXX_extreme_weather_types.csv: Contains extreme weather conditions (by percentile XX) for each cluster
+        - all_mean_weather_types.csv: Contains average weather conditions for each cluster
+        
+        extreme_percentile: list | tuple
+        - tables of all mean values in each percentile groups
         
     Notes
     -----
     This function:
     1. Assigns cluster labels to each fire weather record
     2. Calculates extreme weather conditions for each cluster using the specified percentile
-    3. Calculates average weather conditions for each cluster
-    4. Analyzes wind direction patterns within each cluster
-    5. Calculates frequency of each weather type based on cluster size and wind direction
-    6. Exports the results to CSV files
+    3. Calculates frequency of each weather type based on cluster size and wind direction
     
-    For extreme weather types, wind speed is increased by 10 units and uses the specified percentile,
-    while relative humidity uses the complementary percentile (100-extreme_percentile).
+    For extreme weather types, wind speed (WS) is increased by 10 units and uses the specified percentile,
+    while relative humidity (RH) uses the complementary percentile (100-extreme_percentile).
     """
-    # ------------------------- Extreme weather types -------------------------
+    
     weather_types = fire_weather.copy()
     weather_types["Cluster"] = (km.labels_+1)
-    
+    wdirs_freqs = windDirFreq(weather_types, col_fire_size)
+    output_table_dict = {}
+
     # Calculate cluster summary
-    cluster_summary = (
-        weather_types.groupby("Cluster").agg(
-            WS=("WS", lambda x: np.percentile(x, extreme_percentile) + 10),
-            RH=("RH", lambda x: np.percentile(x, 100-extreme_percentile)),
-            T=("T", lambda x: np.percentile(x, extreme_percentile)),
-            n=("Cluster", "size"),
-        ).reset_index()
-    )
+    if isinstance(extreme_percentile, int | float):
+        # ------------------------- Extensive percentile groups -------------------------
+        # add p0 and p100 for full coverage
+        ext_percentile.extend([0,100])
+        ext_percentile = sorted(set(ext_percentile)) # remove duplicated values
+        
+        for i in range(len(ext_percentile)-1):
+            ext_pt = ext_percentile[i:i+2] # get every two values in list
+            cluster_summary = weatherAggregate(weather_types, ext_pt)
+            output_table_dict[f'p{ext_pt[0]}-p{ext_pt[1]}_mean_weather_types'] = addWindDir(cluster_summary, wdirs_freqs)
 
-    cluster_summary["freq_cluster"] = cluster_summary["n"] / cluster_summary["n"].sum()
-    cluster_summary.drop("n", axis=1, inplace=True)
+    elif isinstance(extreme_percentile, tuple | list):
+        # ------------------------- Extreme weather types -------------------------
+        cluster_summary = weatherAggregate(weather_types, extreme_percentile)
+        output_table_dict[f'p{extreme_percentile}_extreme_weather_types'] = addWindDir(cluster_summary, wdirs_freqs)
 
-    # Evaluate the wind direction
-    wdirs = weather_types[["Cluster", "WD", col_fire_size]].copy()
-    wdirs["dir"] = np.select(
-        [
-            (wdirs["WD"] >= 0) & (wdirs["WD"] <= 22.5),
-            (wdirs["WD"] > 22.5) & (wdirs["WD"] <= 67.5),
-            (wdirs["WD"] > 67.5) & (wdirs["WD"] <= 112.5),
-            (wdirs["WD"] > 112.5) & (wdirs["WD"] <= 157.5),
-            (wdirs["WD"] > 157.5) & (wdirs["WD"] <= 202.5),
-            (wdirs["WD"] > 202.5) & (wdirs["WD"] <= 247.5),
-            (wdirs["WD"] > 247.5) & (wdirs["WD"] <= 292.5),
-            (wdirs["WD"] > 292.5) & (wdirs["WD"] <= 337.5),
-        ],
-        [0, 45, 90, 135, 180, 225, 270, 315],
-        default=0,
-    )
-
-    # Wind dir frequency in each cluster
-    wdirs_freqs = (
-        wdirs.groupby(["Cluster", "dir"])["dir"]
-        .count()
-        .reset_index(name="n")
-        .groupby("Cluster")
-        .apply(lambda x: x.assign(freq_wd=x["n"] / x["n"].sum()))
-        .drop("n", axis=1)
-    )
-
-    wdirs_ba = (
-        wdirs.groupby(["Cluster","dir"])[col_fire_size].sum()
-    )
-
-    # Attributing the WD value
-    for nc in range(1, n_max + 1):
-        for d in [0, 45, 90, 135, 180, 225, 270, 315]:
-            if not ((wdirs_freqs["Cluster"] == nc) & (wdirs_freqs["dir"] == d)).any():
-                new_row = pd.DataFrame({"Cluster": [nc], "dir": [d], "freq_wd": [0.0]})
-                wdirs_freqs = pd.concat([wdirs_freqs, new_row])
-
-    wdirs_freqs.reset_index(inplace=True, drop=True)
-    wdirs_freqs = pd.concat([wdirs_freqs, wdirs_ba.reset_index(drop=True)], axis=1)
-
-    weather_wd = pd.merge(cluster_summary, wdirs_freqs, on="Cluster")
-    weather_wd["freq"] = weather_wd["freq_cluster"] * weather_wd["freq_wd"]
-    weather_wd.to_csv(os.path.join(weather_dir, "extreme_weather_types.csv"), 
-                      index=False, sep=';', decimal=',')
-
-    print("Extreme weather types done")
-
-    # ------------------------- Average weather types -------------------------
-    mean_weather_types = (
-        weather_types.groupby("Cluster")
-        .agg(
-            WS=("WS", lambda x: np.mean(x) + 10),
-            RH=("RH", "mean"),
-            T=("T", "mean"),
-            n=("Cluster", "size"),
-        )
-        .reset_index()
-    )
-
-    mean_weather_types["freq_cluster"] = mean_weather_types["n"] / mean_weather_types["n"].sum()
-    mean_weather_types.drop("n", axis=1, inplace=True)
-
-    mean_weather_wd = pd.merge(mean_weather_types, wdirs_freqs, on="Cluster")
-    mean_weather_wd["freq"] = mean_weather_wd["freq_cluster"] * mean_weather_wd["freq_wd"]
-    mean_weather_wd.to_csv(os.path.join(weather_dir, "mean_weather_types.csv"), 
-                           index=False, sep=';', decimal=',')
-
-    print("Mean weather types done")
+        # ------------------------- Average weather types -------------------------
+        mean_weather_types = weatherAggregate(weather_types, "mean")
+        output_table_dict['all_mean_weather_types'] = addWindDir(mean_weather_types, wdirs_freqs)
+        
+        
+    else:
+        raise ValueError(f"Unknown value type for extreme_percentile: {type(extreme_percentile)}")
+    
+    # Output Datasets into CSV
+    for fname, table in output_table_dict.items():
+        table.to_csv(os.path.join(weather_dir, f"{fname}.csv"), 
+                     index=False) # Check if we need these options: sep=';', decimal=','
+        
     print("\n--> Weather data done")
 
 
@@ -294,3 +244,100 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
     
     print("Sampled CSV file exported.")
     print("--> Fire ignition points done.")
+
+# Internal function
+def weatherAggregate(weather_tp, ext_percentile):
+    """
+    (internal function) process and aggregate weather types into designed groups
+    """
+    if isinstance(ext_percentile, tuple | list):
+        if len(ext_percentile) != 2:
+            raise ValueError(f"ext_percentile: {ext_percentile} should get exactly 2 values for cluster average!")
+        
+        cluster_sum = weather_tp.groupby("Cluster").agg(
+            WS=("WS", lambda x: mean_between_percentiles(x, *ext_percentile)),
+            RH=("RH", lambda x: mean_between_percentiles(x, *ext_percentile)),
+            T=("T",  lambda x: mean_between_percentiles(x, *ext_percentile)),
+            n=("Cluster", "size")
+        ).reset_index()
+
+    elif isinstance(ext_percentile, int | float):
+        cluster_sum = weather_tp.groupby("Cluster").agg(
+            WS=("WS", lambda x: np.percentile(x, ext_percentile) + 10),
+            RH=("RH", lambda x: np.percentile(x, 100-ext_percentile)),
+            T=("T", lambda x: np.percentile(x, ext_percentile)),
+            n=("Cluster", "size"),
+        ).reset_index()
+
+    elif ext_percentile == "mean":
+        cluster_sum = weather_tp.groupby("Cluster").agg(
+            WS=("WS", lambda x: np.mean(x) + 10),
+            RH=("RH", "mean"),
+            T=("T", "mean"),
+            n=("Cluster", "size"),
+        ).reset_index()
+
+    cluster_sum["freq_cluster"] = cluster_sum["n"] / cluster_sum["n"].sum()
+    cluster_sum.drop("n", axis=1, inplace=True)
+
+    return(cluster_sum)
+
+def windDirFreq(weather_tp, col_fire_size):
+    """
+    (internal function) assigning independent wind directions to each cluster, including all possible wind directions
+    """
+    # Evaluate the wind direction
+    wdirs = weather_tp[["Cluster", "WD", col_fire_size]].copy()
+    wdirs["dir"] = np.select(
+        [
+            (wdirs["WD"] >= 0) & (wdirs["WD"] <= 22.5),
+            (wdirs["WD"] > 22.5) & (wdirs["WD"] <= 67.5),
+            (wdirs["WD"] > 67.5) & (wdirs["WD"] <= 112.5),
+            (wdirs["WD"] > 112.5) & (wdirs["WD"] <= 157.5),
+            (wdirs["WD"] > 157.5) & (wdirs["WD"] <= 202.5),
+            (wdirs["WD"] > 202.5) & (wdirs["WD"] <= 247.5),
+            (wdirs["WD"] > 247.5) & (wdirs["WD"] <= 292.5),
+            (wdirs["WD"] > 292.5) & (wdirs["WD"] <= 337.5),
+        ],
+        [0, 45, 90, 135, 180, 225, 270, 315],
+        default=0, # assign WD > 337.5 to 0
+    )
+
+    # Wind dir frequency in each cluster
+    wdirs_freqs = (
+        wdirs.groupby(["Cluster", "dir"])["dir"]
+        .count()
+        .reset_index(name="n")
+        .groupby("Cluster", group_keys = False)[["Cluster", "dir", "n"]]
+        .apply(lambda x: x.assign(freq_wd=x["n"] / x["n"].sum()))
+        .drop("n", axis=1)
+    )
+    
+    wdirs_ba = (
+        wdirs.groupby(["Cluster","dir"])[col_fire_size].sum()
+    )
+
+    # Attributing the WD value
+    for nc in range(1, len(set(weather_tp['Cluster'])) + 1):
+        for d in [0, 45, 90, 135, 180, 225, 270, 315]:
+            if not ((wdirs_freqs["Cluster"] == nc) & (wdirs_freqs["dir"] == d)).any():
+                new_row = pd.DataFrame({"Cluster": [nc], "dir": [d], "freq_wd": [0.0]})
+                wdirs_freqs = pd.concat([wdirs_freqs, new_row])
+
+    wdirs_freqs.reset_index(inplace=True, drop=True)
+    wdirs_freqs = pd.concat([wdirs_freqs, wdirs_ba.reset_index(drop=True)], axis=1)
+
+    return(wdirs_freqs)
+
+def addWindDir(cluster_summary, wdirs_freqs):
+    """
+    (internal function) merge generated wind frequencies into weather types DataFrame
+    """
+    weather_wd = pd.merge(cluster_summary, wdirs_freqs, on="Cluster")
+    weather_wd["freq"] = weather_wd["freq_cluster"] * weather_wd["freq_wd"]
+
+    return(weather_wd)
+
+def mean_between_percentiles(x, p_low, p_high):
+    low, high = np.percentile(x, [p_low, p_high])
+    return x[(x >= low) & (x <= high)].mean()
