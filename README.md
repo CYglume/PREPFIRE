@@ -70,7 +70,7 @@ user_pipeline = scenfire.pipeline.ScenFirePipeline(
     output_crs="EPSG:3035",         # Optional: Output coordinate system
     col_fire_size="Area_ha",        # Optional: Column name for fire size in hectares
     col_fire_date="Date",           # Optional: Column name for fire dates
-    extreme_percentile=95,          # Optional: Threshold for extreme weather (0-100)
+    extreme_percentile=95,          # Optional: Threshold for extreme weather (0-100). can be multiple values, e.g. [30, 60] for average conditions between percentiles
     lcp_components=[                # Optional: Landscape components for LCP file (Follow the order of landscape file for USGS FlamMap)
         'elevation', 'slope', 'aspect', 'fuel',
         'canopyCover', 'canopyHeight', 'cbh', 'cbd'
@@ -82,8 +82,9 @@ user_pipeline = scenfire.pipeline.ScenFirePipeline(
     max_clusters=10,                # Optional: Maximum number of weather clusters
     fire_months=[5,6,7,8,9,10],     # Optional: Months to consider for fire season
     lcp_resolution=100,             # Optional: Resolution in meters for LCP raster
-    done_cds_download=False         # Optional: Whether to skip CDS download procedures
-    log_level="INFO",               # Optional: Logging level
+    done_cds_download=False,        # Optional: Whether to skip CDS download procedures
+    livePlantMoist = [60, 90],      # Optional: Two values for setting moisture of [live Herbaceous, live Woody] plants in fms file
+    log_level="INFO"                # Optional: Logging level
 )
 
 # Start running the process of the pipeline object
@@ -103,18 +104,21 @@ results = run_prepare(
 
 The module provide three main functions:
 - `setup_project_structure`: Create the folder structure for input datasets
-- `ScenFirePipeline`: Create the pipeline object by Class function
-- `run_prepare`: Incorporate the above two functions to provide a single line function for all processes
+- `ScenFirePipeline`: Create the pipeline object for quick processing datasets (load local data)
+  - `ScenFirePipeline.prepare_simulation()` Main function under pipeline object to run all processing functions
+- `run_prepare`: Incorporate the above two functions to provide a single line function for all processes (use all default values from the package)
 
 The `ScenFirePipeline` class object provides the following methods:
-- `process_fire_data(plot_fires=False)`: Load and process fire data from shapefiles
-- `process_weather_data()`: Process weather data for the region
-- `generate_weather_types()`: Process and generate weather types from processed data
-- `generate_ignition_points()`: Generate sample ignition points
-- `process_landscape()`: Process landscape data for the region
-- `generate_output_files()`: Generate FMS and KDE point density files
-- `prepare_simulation()`: Run the complete fire simulation pipeline
-- `run_fire_simulations()`: Run fire simulations based on the prepared data (pending implementation)
+1. `process_fire_data()`: Load and process fire data from shapefiles
+2. `process_weather_data()`: Process weather data for the region
+3. `generate_weather_types()`: Process and generate weather types from processed data
+4. `generate_ignition_points()`: Generate sample ignition points
+5. `process_landscape()`: Process landscape data for the region
+6. `generate_output_files()`: Generate FMS and KDE point density files
+- `prepare_simulation()`: Run the complete fire simulation pipeline from 1. to 6.
+- ~~`run_fire_simulations()`: Run fire simulations based on the prepared data (pending implementation)~~
+
+See function description within each object function to get further information.
 
 ### CDS API Key
 
@@ -147,42 +151,6 @@ The argument `bound_coords` in `scenfire.pipeline.ScenFirePipeline` takes care o
    2. No extra extent set up:
         Use the whole extent from input data `fire.shp` for the process
 
-
-## Development
-
-### Quick Start for Development
-
-```bash
-# Create and activate environment
-conda create -n scenfire-dev python=3.10
-conda activate scenfire-dev
-
-# Install critical dependencies from conda-forge
-conda install -c conda-forge netcdf4 geopandas rasterio xarray
-
-# Install other dependencies
-conda install -c conda-forge numpy pandas cdsapi scikit-learn shapely matplotlib pyproj zarr cftime h5netcdf pytest
-
-# Build and install package
-conda build .
-conda install --use-local scenfire
-
-# Run tests
-# Add tests as needed
-pytest tests/
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## Acknowledgments
 

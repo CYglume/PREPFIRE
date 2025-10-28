@@ -84,18 +84,18 @@ class ScenFirePipeline:
         output_crs: str = "EPSG:3035",
         col_fire_size: str = 'Area_ha',
         col_fire_date: str = 'Date',
-        extreme_percentile: float = 95,
+        extreme_percentile: int | float | list | tuple = 95,
         lcp_components: Optional[List[str]] = ['elevation', 'slope', 'aspect', 'fuel', 'canopyCover', 'canopyHeight', 'cbh', 'cbd'],
         cds_api_key: Optional[str] = None,
         time_of_day: List[str] = ['12:00'],
         buffer_size: int = 20000,
         min_clusters: int = 4,
         max_clusters: int = 10,
-        log_level: str = 'INFO',
         fire_months: Optional[List[int]] = [5,6,7,8,9,10],
         lcp_resolution: int = 100,
         done_cds_download: bool = False,
         livePlantMoist = [60, 90],
+        log_level: str = 'INFO',
     ):
         """
         Initialize the SCENFIRE pipeline.
@@ -118,9 +118,9 @@ class ScenFirePipeline:
             Column name for fire size data in hectares. Default is 'Area_ha'.
         col_fire_date : str, optional
             Column name for fire date data. Default is 'Date'.
-        extreme_percentile : float, optional
-            Percentile threshold for extreme weather types. Must be between 0 and 100.
-            Default is 95.
+        extreme_percentile : int | tuple | list (Default = 95)
+            int: Percentile for extreme weather types (e.g., 95 for 95th percentile) \\
+            tuple | list: List of percentiles to generate mean weather types within each percentile interval (from p0 to p100)
         lcp_components : list of str, optional
             List of landscape components for LCP building. Default includes:
             ['elevation', 'slope', 'aspect', 'fuel', 'canopyCover', 'canopyHeight', 'cbh', 'cbd']
@@ -190,8 +190,12 @@ class ScenFirePipeline:
             raise ValueError("Region name must be provided")
             
         # Validate other parameters
-        if self.extreme_percentile < 0 or self.extreme_percentile > 100:
-            raise ValueError("Extreme percentile must be between 0 and 100")
+        if isinstance(self.extreme_percentile, int | float):
+            if self.extreme_percentile < 0 or self.extreme_percentile > 100:
+                raise ValueError("Extreme percentile must be between 0 and 100")
+        if isinstance(self.extreme_percentile, list | tuple):
+            if any(pp < 0 or pp > 100 for pp in self.extreme_percentile):
+                raise ValueError("Extreme percentile must be between 0 and 100")
         if self.buffer_size <= 0:
             raise ValueError("Buffer size must be positive")
         if self.min_clusters < 2:
