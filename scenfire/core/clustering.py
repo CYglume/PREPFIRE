@@ -142,7 +142,6 @@ def output_weather_types(fire_weather, weather_dir, km, col_fire_size, extreme_p
         
     print("\n--> Weather data done")
 
-
 def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_filename, out_crs = None, num_points = 500000):
     """
     Generates random ignition points strictly within the *actual geometry* of a boundary layer

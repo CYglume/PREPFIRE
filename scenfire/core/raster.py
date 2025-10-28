@@ -220,7 +220,7 @@ def build_lcp_file(input_folder, output_file, lcp_comp = ['elevation', 'slope', 
 
     print("LCP file built: "+output_file) 
 
-def produce_fms(fuel_raster_path, weather_dir, fms_out_dir):
+def produce_fms(fuel_raster_path, weather_dir, fms_out_dir, liveHerb = 60, liveWood = 90):
     """
     Produce fuel moisture scenario (FMS) files based on weather type data.
     
@@ -232,6 +232,10 @@ def produce_fms(fuel_raster_path, weather_dir, fms_out_dir):
         Directory containing weather type CSV files
     fms_out_dir : str
         Directory to write output FMS files to
+    liveHerb : int, optional (default = 60)
+        Moisture condition for live herbaceous plants
+    liveWood : int, optional (default = 90)
+        Moisture condition for live woody plants
         
     Returns
     -------
@@ -266,7 +270,7 @@ def produce_fms(fuel_raster_path, weather_dir, fms_out_dir):
     for wtype in ["extreme", "mean"]:
         weather_type_path = os.path.join(weather_dir, f"{wtype}_weather_types.csv")
         print(f"Using weather type file: {weather_type_path}")
-        write_fms(weather_type_path, fms_out_dir, fuels, wtype)
+        write_fms(weather_type_path, fms_out_dir, fuels, liveHerb, liveWood, wtype)
 
 def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster, KDE_bw = 0.1):
     """
@@ -356,7 +360,7 @@ def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster, KDE_
 
 # Internal functions
 
-def write_fms(input_wt_fn, output_fms_dir, f_types, type_weather="extreme"):
+def write_fms(input_wt_fn, output_fms_dir, f_types, liveHerb = 60, liveWood = 90, type_weather="extreme"):
     """
     Write fuel moisture scenario (FMS) files based on weather type data.
     
@@ -368,6 +372,10 @@ def write_fms(input_wt_fn, output_fms_dir, f_types, type_weather="extreme"):
         Directory to write FMS files to
     f_types : array-like
         List of fuel types to generate FMS for
+    liveHerb : int, optional (default = 60)
+        Moisture condition for live herbaceous plants
+    liveWood : int, optional (default = 90)
+        Moisture condition for live woody plants
     type_weather : str, optional (default="extreme")
         Type of weather scenario ("extreme" or "mean")
         
@@ -396,4 +404,4 @@ def write_fms(input_wt_fn, output_fms_dir, f_types, type_weather="extreme"):
         # Write moisture values for each fuel type
         with open(fms_file, "w", encoding="utf-8") as f:
             for fuel_type in f_types:
-                f.write(f"{fuel_type} {q} {q+1} {q+2} 60 90\n") 
+                f.write(f"{fuel_type} {q} {q+1} {q+2} {liveHerb} {liveWood}\n") 

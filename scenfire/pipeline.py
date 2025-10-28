@@ -95,6 +95,7 @@ class ScenFirePipeline:
         fire_months: Optional[List[int]] = [5,6,7,8,9,10],
         lcp_resolution: int = 100,
         done_cds_download: bool = False,
+        livePlantMoist = [60, 90],
     ):
         """
         Initialize the SCENFIRE pipeline.
@@ -149,6 +150,9 @@ class ScenFirePipeline:
             Default is 100.
         done_cds_download : bool, optional
             Whether to skip the CDS download step. Default is False.
+        livePlantMoist: list of int, optional
+            Two int of moisture of live herbaceous (first int) and live woody plants (second int).
+            Only accepted exactly two values.
 
         Raises
         ------
@@ -157,21 +161,22 @@ class ScenFirePipeline:
         """
         print(f"------ Initialization of SCENFIRE pipeline for region: {region} ------")
         # Initialize attributes
-        self.region = region
-        self.bound_coords = bound_coords
-        self.output_crs = output_crs
-        self.col_fire_size = col_fire_size
-        self.col_fire_date = col_fire_date
+        self.region             = region
+        self.bound_coords       = bound_coords
+        self.output_crs         = output_crs
+        self.col_fire_size      = col_fire_size
+        self.col_fire_date      = col_fire_date
         self.extreme_percentile = extreme_percentile
-        self.time_of_day = time_of_day
-        self.buffer_size = buffer_size
-        self.min_clusters = min_clusters
-        self.max_clusters = max_clusters
-        self.log_level = log_level
-        self.fire_months = fire_months
-        self.lcp_resolution = lcp_resolution
-        self.lcp_components = lcp_components
-        self.done_cds_download = done_cds_download
+        self.time_of_day        = time_of_day
+        self.buffer_size        = buffer_size
+        self.min_clusters       = min_clusters
+        self.max_clusters       = max_clusters
+        self.log_level          = log_level
+        self.fire_months        = fire_months
+        self.lcp_resolution     = lcp_resolution
+        self.lcp_components     = lcp_components
+        self.done_cds_download  = done_cds_download
+        self.livePlantMoist     = livePlantMoist
         
         # Set root directory
         self.root_dir = root_dir if root_dir else os.getcwd()
@@ -506,7 +511,6 @@ class ScenFirePipeline:
                 self.fire_weather,
                 self.weather_dir,
                 self.km_model,
-                self.max_clusters,
                 self.col_fire_size,
                 self.extreme_percentile
             )
@@ -679,7 +683,8 @@ class ScenFirePipeline:
         produce_fms(
             fuel_raster,
             self.weather_dir,
-            fms_dir
+            fms_dir,
+            *self.livePlantMoist
         )
         
         # Produce ignition probability raster
