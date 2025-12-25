@@ -515,8 +515,8 @@ class ScenFirePipeline:
                 self.fire_weather,
                 self.weather_dir,
                 self.km_model,
-                self.col_fire_size,
-                self.extreme_percentile
+                self.extreme_percentile,
+                self.col_fire_size
             )
             
             missing_files = [f for f in required_files if not os.path.exists(f)]
