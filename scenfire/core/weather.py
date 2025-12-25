@@ -371,7 +371,7 @@ def weather_data_processing(weather_dir, in_cds_time="valid_time", in_cds_x = 'l
         plt.show()
     return save_weather_data(weather_data, weather_dir, in_cds_time)
 
-def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_column = 'Year', **kwargs):
+def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_column = 'Year', dfmc_type = 'rh', **kwargs):
     """
     Extract weather data at fire locations and dates from NetCDF files.
     
@@ -385,6 +385,8 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
         Column name in fires_gdf_wgs containing the fire dates
     year_column : str, optional (default='Year')
         Column name in fires_gdf_wgs containing the fire years. If not provided, the year will be extracted from the fire date_column.
+    dfmc_type : str, optional (default='rh')
+        Choose between 'rh' and 'vpd' to use DFMC calculated by corresponding air dryness index
     **kwargs : dict
         Additional keyword arguments passed to get_fire_weather()
         
@@ -399,6 +401,14 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
     wspeed = xr.open_dataset(os.path.join(weather_dir, "wspeed.nc"), engine='netcdf4')
     wdir = xr.open_dataset(os.path.join(weather_dir, "wdir.nc"), engine='netcdf4')
     rh = xr.open_dataset(os.path.join(weather_dir, "rh.nc"), engine='netcdf4')
+    if (dfmc_type == 'rh'):
+        print("Use dfmc calculated from RH.....")
+        dfmc = xr.open_dataset(os.path.join(weather_dir, "dfmc.nc"), engine='netcdf4')
+    elif (dfmc_type == 'vpd'):
+        print("Use dfmc calculated from VPD.....")
+        dfmc = xr.open_dataset(os.path.join(weather_dir, "dfmc_vpd.nc"), engine='netcdf4')
+    else:
+        raise ValueError("'dfmc_type' should be either 'rh' or 'vpd'!")
     
     # Convert temperatures from K to °C
     temp = temp - 273
@@ -410,6 +420,7 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
     wind_ext = [get_fire_weather(x, fires_gdf_wgs, wspeed, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
     wind_dir = [get_fire_weather(x, fires_gdf_wgs, wdir, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
     rh_ext = [get_fire_weather(x, fires_gdf_wgs, rh, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
+    dfmc_ext = [get_fire_weather(x, fires_gdf_wgs, dfmc, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
 
     # Combine datasets
     fire_weather = pd.DataFrame(fires_gdf_wgs)
@@ -419,6 +430,7 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
     fire_weather['WS'] = [float(arr.wspeed.values) for arr in wind_ext]
     fire_weather['WD'] = [float(arr.wdir.values) for arr in wind_dir]
     fire_weather['RH'] = [float(arr.rh.values) for arr in rh_ext]
+    fire_weather['DFMC'] = [float(arr.dfmc.values) for arr in dfmc_ext]
     fire_weather = fire_weather.dropna(subset=fire_weather.columns[org_colNum:])
 
 
@@ -430,7 +442,8 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
         'TD': lambda x: np.percentile(x, 95), # 95th percentile dewpoint
         'WS': lambda x: np.max(x)+10,         # Maximum wind speed + 10
         'WD': lambda x: x.value_counts().idxmax(), # Most common wind direction
-        'RH': lambda x: np.percentile(x, 5)   # 5th percentile relative humidity
+        'RH': lambda x: np.percentile(x, 5),   # 5th percentile relative humidity
+        'DFMC': lambda x: np.percentile(x, 5),   # 5th percentile dead fuel moisture content
     }).reset_index()
 
     # Save results to CSV files
