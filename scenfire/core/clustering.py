@@ -5,7 +5,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import os
 
-def cluster_fire_weather(fire_weather, min_n=4, max_n=10):
+def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T', 'RH', 'WS', 'DFMC']):
     """
     Performs K-means clustering on fire weather data to identify distinct weather patterns.
     
@@ -35,7 +35,7 @@ def cluster_fire_weather(fire_weather, min_n=4, max_n=10):
     among possible cluster numbers. If the optimal number is less than min_n, min_n is used instead.
     """
     print("Clustering...")
-    clust_data = fire_weather[["WS", "RH", "T"]]
+    clust_data = fire_weather[weather_variable]
     scaled_data = (clust_data - clust_data.mean()) / clust_data.std()
 
     # Find optimal number of clusters using silhouette score
@@ -167,8 +167,20 @@ def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_
     
     # Output Datasets into CSV
     for fname, table in output_table_dict.items():
-        table.to_csv(os.path.join(weather_dir, f"{fname}.csv"), 
-                     index=False) # Check if we need these options: sep=';', decimal=','
+        outName = os.path.join(weather_dir, f"{fname}.csv")
+        
+        # Check file existence
+        i = 0
+        while os.path.exists(outName):
+            i += 1
+            outName = os.path.join(weather_dir, f"{fname}-{i}.csv")        
+        if i != 0:
+            print(f"File exists for {fname}.csv! Save as {fname}-{i}.csv")
+            
+        table.to_csv(outName,
+                     index=False)
+
+
         
     print("\n--> Weather data done")
 
@@ -188,7 +200,7 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
         Path to the output CSV file where the ignition points will be saved.
     out_crs : str, optional
         Output coordinate reference system (CRS) for the points in the CSV file.
-        If `None` (default), the points will retain the `bound_crs`.
+        If `None` (default), the points will be created with `bound_crs`.
     num_points : int, optional
         The total number of random points to generate *within the actual boundary*.
         Defaults to 500,000.
@@ -298,6 +310,7 @@ def weatherAggregate(weather_tp, ext_percentile, weather_variables = ['T', 'RH',
             WS=("WS", lambda x: np.percentile(x, ext_percentile) + 10),
             RH=("RH", lambda x: np.percentile(x, 100-ext_percentile)),
             T=("T", lambda x: np.percentile(x, ext_percentile)),
+            DFMC=("DFMC", lambda x: np.percentile(x, 100-ext_percentile)),
             n=("Cluster", "size"),
         ).reset_index()
 
@@ -306,6 +319,7 @@ def weatherAggregate(weather_tp, ext_percentile, weather_variables = ['T', 'RH',
             WS=("WS", lambda x: np.mean(x) + 10),
             RH=("RH", "mean"),
             T=("T", "mean"),
+            DFMC=("DFMC", "mean"),
             n=("Cluster", "size"),
         ).reset_index()
 

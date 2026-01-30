@@ -70,5 +70,4 @@ def dfmc_vpd_calc(vpd):
     xarray.DataArray
         Dead fuel moisture content as a percentage
     """
-    dfmc = 0.8 + 20.43 * np.exp((-0.34*vpd))
-    return xr.DataArray(dfmc, coords=vpd.coords, dims=vpd.dims, attrs={"units": "percentage", "description": "DFMC"}) 
+    return 0.8 + 20.43 * np.exp((-0.34*vpd))

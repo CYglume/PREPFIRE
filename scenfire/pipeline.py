@@ -95,6 +95,8 @@ class ScenFirePipeline:
         lcp_resolution: int = 100,
         done_cds_download: bool = False,
         livePlantMoist = [60, 90],
+        weather_variable: Optional[List[str]] = ['T', 'RH', 'WS', 'DFMC'],
+        fire_weather: Optional[str] = None,
         log_level: str = 'INFO',
     ):
         """
@@ -150,9 +152,14 @@ class ScenFirePipeline:
             Default is 100.
         done_cds_download : bool, optional
             Whether to skip the CDS download step. Default is False.
+        weather_variable: List of str, optional
+            Weather variables to be used for weather scenario clustering.
         livePlantMoist: list of int, optional
             Two int of moisture of live herbaceous (first int) and live woody plants (second int).
             Only accepted exactly two values.
+        fire_weather: path to csv file for fire weather input, optional
+            Table should contain fire size information (column name: col_fire_size) and fire weather extraction at starting date.
+            Weather column should contain variables stated in `weather_variable`
 
         Raises
         ------
@@ -176,6 +183,8 @@ class ScenFirePipeline:
         self.lcp_resolution     = lcp_resolution
         self.lcp_components     = lcp_components
         self.done_cds_download  = done_cds_download
+        self.weather_variable   = weather_variable
+        self.fire_weather       = fire_weather
         self.livePlantMoist     = livePlantMoist
         
         # Set root directory
@@ -216,7 +225,6 @@ class ScenFirePipeline:
         self.fires_gdf = None
         self.bound_extent = None
         self.buffered_bound_extent = None
-        self.fire_weather = None
         self.km_model = None
         self.ignition_file = None
         self.lcp_file = None
@@ -415,12 +423,12 @@ class ScenFirePipeline:
             # Download weather data
             if not self.done_cds_download:
                 self.done_cds_download = download_weather_data(
-                    self.fires_gdf_WGS84,
-                    self.col_fire_date,
-                    self.processed_data_path,
-                    self.buffered_bound_extent,
-                    self.output_crs,
-                    self.cds_api_key,
+                    gdf=self.fires_gdf_WGS84,
+                    date_column=self.col_fire_date,
+                    processed_path=self.processed_data_path,
+                    bound_extent_ply=self.buffered_bound_extent,
+                    bound_crs=self.output_crs,
+                    cdsAPI_KEY=self.cds_api_key,
                     fetch=True,
                     time_of_day=self.time_of_day,
                     fire_months=self.fire_months
@@ -428,17 +436,18 @@ class ScenFirePipeline:
             
             # Process weather data
             weather_data_processing(
-                self.weather_dir,
-                "valid_time",
-                "longitude",
-                "latitude"
+                weather_dir=self.weather_dir,
+                in_cds_time="valid_time",
+                in_cds_x="longitude",
+                in_cds_y="latitude"
             )
  
             # Extract fire weather
             self.fire_weather = extract_fire_weather(
-                self.fires_gdf_WGS84,
-                self.weather_dir,
-                self.col_fire_date
+                fires_gdf_wgs=self.fires_gdf_WGS84,
+                weather_dir=self.weather_dir,
+                date_column=self.col_fire_date,
+                dfmc_type='rh'
             )
             
             if self.fire_weather is None or self.fire_weather.empty:
@@ -475,13 +484,6 @@ class ScenFirePipeline:
         if self.fire_weather is None:
             raise ValueError("Weather data not processed. Call process_weather_data() first.")
         
-        # Validate output files
-        required_files = [
-            os.path.join(self.weather_dir, "extreme_weather_types.csv"),
-            os.path.join(self.weather_dir, "mean_weather_types.csv")
-        ]
-        if all([os.path.exists(f) for f in required_files]):
-            return self
 
         
         try:
@@ -501,9 +503,10 @@ class ScenFirePipeline:
             
             # Perform clustering
             self.km_model = cluster_fire_weather(
-                self.fire_weather,
+                fire_weather=self.fire_weather,
                 min_n=self.min_clusters,
-                max_n=self.max_clusters
+                max_n=self.max_clusters,
+                weather_variable=self.weather_variable
             )
             
             if self.km_model is None:
@@ -512,18 +515,13 @@ class ScenFirePipeline:
             # Generate weather types
             logger.info("Generating weather types...")
             output_weather_types(
-                self.fire_weather,
-                self.weather_dir,
-                self.km_model,
-                self.extreme_percentile,
-                self.col_fire_size
+                fire_weather=self.fire_weather,
+                weather_dir=self.weather_dir,
+                km=self.km_model,
+                extreme_percentile=self.extreme_percentile,
+                col_fire_size=self.col_fire_size,
+                weather_variable=self.weather_variable
             )
-            
-            missing_files = [f for f in required_files if not os.path.exists(f)]
-            if missing_files:
-                raise FileNotFoundError(
-                    f"Required weather type files not created: {', '.join(missing_files)}"
-                )
             
             logger.info(f"Weather type generation completed successfully with {self.km_model.n_clusters} clusters")
             
@@ -561,9 +559,9 @@ class ScenFirePipeline:
         
         # Generate the sample points
         generate_sample_ignition_points(
-            self.bound_extent,
-            self.output_crs, 
-            self.output_ig_point_list
+            bound_geometry=self.bound_extent,
+            bound_crs=self.output_crs, 
+            sampletxt_output_filename=self.output_ig_point_list
         )
         
         # Validate output file was created
@@ -625,26 +623,26 @@ class ScenFirePipeline:
                 
                 # First process the raster
                 process_raster(
-                    input_file,
-                    temp_file,
-                    gdf_bbox,
+                    input_raster_path=input_file,
+                    output_raster_path=temp_file,
+                    gdf_bbox=gdf_bbox,
                     new_crs=self.output_crs,
                     resolution=self.lcp_resolution
                 )
                 
                 # Then crop the processed raster to the bounding box
                 crop_raster_to_bbox(
-                    temp_file,
-                    output_file,
-                    gdf_bbox,
+                    input_raster_path=temp_file,
+                    output_raster_path=output_file,
+                    gdf_bbox=gdf_bbox,
                 )
             
             # Build LCP file
             self.lcp_file = os.path.join(self.processed_data_path, "Final", "lcp_.tif")
             build_lcp_file(
-                os.path.join(self.processed_data_path, "Landscape"),
-                self.lcp_file,
-                self.lcp_components
+                input_folder=os.path.join(self.processed_data_path, "Landscape"),
+                output_file=self.lcp_file,
+                lcp_comp=self.lcp_components
             )
             
             # Validate LCP file creation
@@ -664,7 +662,7 @@ class ScenFirePipeline:
                     
         return self
     
-    def generate_output_files(self):
+    def generate_fmd_and_simpoints(self):
         """
         Generate FMS and KDE point density files.
         
@@ -685,10 +683,11 @@ class ScenFirePipeline:
         fms_dir = os.path.join(self.weather_dir, "fms")
         
         produce_fms(
-            fuel_raster,
-            self.weather_dir,
-            fms_dir,
-            *self.livePlantMoist
+            fuel_raster_path=fuel_raster,
+            weather_dir=self.weather_dir,
+            fms_out_dir=fms_dir,
+            liveHerb=self.livePlantMoist[0],
+            liveWood=self.livePlantMoist[1]
         )
         
         # Produce ignition probability raster
@@ -697,9 +696,9 @@ class ScenFirePipeline:
         
         kde_file = os.path.join(self.processed_data_path, "Ignition", "ig_kde.tif")
         produce_ignition_prob_KDE(
-            fires_f,
-            fuel_raster,
-            kde_file
+            fires_f=fires_f,
+            template_raster_path=fuel_raster,
+            output_raster=kde_file
         )
         
         # Store output file paths
@@ -761,7 +760,7 @@ class ScenFirePipeline:
                 .generate_weather_types()
                 .generate_ignition_points()
                 .process_landscape()
-                .generate_output_files()
+                .generate_fmd_and_simpoints()
             )
             
             logger.info("Pipeline completed successfully")

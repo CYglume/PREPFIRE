@@ -1,8 +1,8 @@
-# SCENFIRE
+# PREPFIRE
 
-SCENFIRE is a Python package for preparing materials for fire simulation and analysis, providing tools for processing fire data, weather conditions, and landscape characteristics. The package implements a complete pipeline for fire risk assessment and simulation.
+PREPFIRE (PREParation for FIRE simulation) is a Python package for preparing materials for fire simulation and analysis, providing tools for processing fire data, weather conditions, and landscape characteristics. The package implements a complete pipeline for fire risk assessment and simulation.
 
-The output files are intended for the fire ignition simulation in FlamMap algorithm.
+The output files are intended for the fire spread simulation in FlamMap algorithm.
 
 ## Features
 
@@ -20,7 +20,7 @@ The output files are intended for the fire ignition simulation in FlamMap algori
 The package is available through conda-forge:
 
 ```bash
-conda install -c conda-forge scenfire
+conda install -c conda-forge prepfire
 ```
 
 ## Project Structure
@@ -54,16 +54,16 @@ scenfire_project/
 ## Usage
 
 ```python
-import scenfire
+import prepfire
 
 # Set up initial project folder if data is not prepared as desired folder structure
-scenfire.pipeline.setup_project_structure(
+prepfire.pipeline.setup_project_structure(
     region,                      # Required: Name of the region folder
     root_dir="path/to/project",  # Optional: Project root directory (defaults to current directory)
 )
 
 # Initialize the pipeline object
-user_pipeline = scenfire.pipeline.ScenFirePipeline(
+user_pipeline = prepfire.pipeline.PrepFirePipeline(
     region="your_region",           # Required: Name of the region folder
     root_dir="path/to/project",     # Optional: Project root directory (defaults to current directory)
     bound_coords=None,                 # Optional: Bounding box coordinates [xmin, ymin, xmax, ymax]. Default by using extent of fire.shp or cropping polygon (if provided)
@@ -84,6 +84,10 @@ user_pipeline = scenfire.pipeline.ScenFirePipeline(
     lcp_resolution=100,             # Optional: Resolution in meters for LCP raster
     done_cds_download=False,        # Optional: Whether to skip CDS download procedures
     livePlantMoist = [60, 90],      # Optional: Two values for setting moisture of [live Herbaceous, live Woody] plants in fms file
+    weather_variable = [            # Optional: Variable names in fire weather table for data clustering 
+        'T', 'RH', 'WS', 'DFMC'
+    ],
+    fire_weather  = None,           # Optional: Path to an external csv for fire weather information (Only used if skipping CDS download)
     log_level="INFO"                # Optional: Logging level
 )
 
@@ -96,7 +100,7 @@ results = user_pipeline.prepare_simulation()
 results = run_prepare(
     region="your_region",        # Required: Name of the region folder
     root_dir="path/to/project",  # Optional: Project root directory
-    **kwargs                     # Optional: Additional keyword arguments for ScenFirePipeline
+    **kwargs                     # Optional: Additional keyword arguments for PrepFirePipeline
 )
 ```
 
@@ -104,17 +108,17 @@ results = run_prepare(
 
 The module provide three main functions:
 - `setup_project_structure`: Create the folder structure for input datasets
-- `ScenFirePipeline`: Create the pipeline object for quick processing datasets (load local data)
-  - `ScenFirePipeline.prepare_simulation()` Main function under pipeline object to run all processing functions
+- `PrepFirePipeline`: Create the pipeline object for quick processing datasets (load local data)
+  - `PrepFirePipeline.prepare_simulation()` Main function under pipeline object to run all processing functions
 - `run_prepare`: Incorporate the above two functions to provide a single line function for all processes (use all default values from the package)
 
-The `ScenFirePipeline` class object provides the following methods:
+The `PrepFirePipeline` class object provides the following methods:
 1. `process_fire_data()`: Load and process fire data from shapefiles
 2. `process_weather_data()`: Process weather data for the region
 3. `generate_weather_types()`: Process and generate weather types from processed data
 4. `generate_ignition_points()`: Generate sample ignition points
 5. `process_landscape()`: Process landscape data for the region
-6. `generate_output_files()`: Generate FMS and KDE point density files
+6. `generate_fmd_and_simpoints()`: Generate FMS and KDE point density files
 - `prepare_simulation()`: Run the complete fire simulation pipeline from 1. to 6.
 - ~~`run_fire_simulations()`: Run fire simulations based on the prepared data (pending implementation)~~
 
@@ -126,14 +130,14 @@ The Copernicus Climate Data Store (CDS) API key can be provided in three ways:
 
 1. Directly in the pipeline initialization:
 ```python
-pipeline = ScenFirePipeline(region="your_region", cds_api_key="your_api_key")
+pipeline = PrepFirePipeline(region="your_region", cds_api_key="your_api_key")
 ```
 
 2. Environment variable:
 ```python
 import os
 os.environ["CDS_API_KEY"] = "your_api_key"
-pipeline = ScenFirePipeline(region="your_region")
+pipeline = PrepFirePipeline(region="your_region")
 ```
 
 3. Interactive prompt:
@@ -141,7 +145,7 @@ If no API key is provided, the program will prompt you to enter it interactively
 
 
 ### Bounding box
-The argument `bound_coords` in `scenfire.pipeline.ScenFirePipeline` takes care of the extent being used for cropping the processed area:
+The argument `bound_coords` in `prepfire.pipeline.PrepFirePipeline` takes care of the extent being used for cropping the processed area:
 
 1. `bound_coords = [xmin, ymin, xmax, ymax]`: Provide quick solution to manually set up bounding coords in degree with default EPSG:4326
 
@@ -151,6 +155,21 @@ The argument `bound_coords` in `scenfire.pipeline.ScenFirePipeline` takes care o
    2. No extra extent set up:
         Use the whole extent from input data `fire.shp` for the process
 
+### Fire Weather
+The algorithm collects and compiles fire weather information through the Copernicus Climate Data Store (CDS). If the user has self produced climatic information for weather scenario clustering, fire weather table (.csv) can be provided to the variable `fire_weather` when construcing the `PrepFirePipeline` object.
+
+The CSV table (file path: `path/to/fire_weather.csv`) should at least contains the following data structure:
+| Date | Fire_size_in_ha | Temperature | RH | Wind_speed | ...
+
+Corresponding column names should be assigned to the object correctly
+```Python
+prepfire.pipeline.PrepFirePipeline(
+    col_fire_size    = "Fire_size_in_ha",
+    col_fire_date    = "Date",
+    weather_variable = ['Temperature', 'RH', 'Wind_speed'],
+    fire_weather     = "path/to/fire_weather.csv"
+)
+```
 
 ## Acknowledgments
 
