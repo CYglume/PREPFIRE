@@ -1,4 +1,4 @@
 include LICENSE
 include README.md
 include CHANGELOG.md
-recursive-include scenfire *.py
+recursive-include prepfire *.py

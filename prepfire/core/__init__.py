@@ -1,5 +1,5 @@
 """
-SCENFIRE Core Module
+PREPFIRE Core Module
 
 This module contains the core functionality for fire simulation and analysis,
 including weather data processing, clustering, and raster operations.

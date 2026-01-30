@@ -1,8 +1,8 @@
 """
-SCENFIRE Pipeline Module
+PREPFIRE Pipeline Module
 
-This module provides a class-based implementation for the SCENFIRE package
-for fire simulation and analysis.
+This module provides a class-based implementation for the PREPFIRE package
+for fire simulation input preparation and analysis.
 """
 
 import os
@@ -54,11 +54,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class ScenFirePipeline:
+class PrepFirePipeline:
     """
-    A class to manage the SCENFIRE pipeline for fire simulation and analysis.
-    
-    This class provides a structured way to execute the complete SCENFIRE pipeline,
+    A class to manage the PREPFIRE pipeline for fire simulation input preparation.
+
+    This class provides a structured way to execute the complete PREPFIRE pipeline,
     including data loading, weather processing, clustering, and file generation.
     
     The pipeline can use either a specified root directory or the current working directory
@@ -100,7 +100,7 @@ class ScenFirePipeline:
         log_level: str = 'INFO',
     ):
         """
-        Initialize the SCENFIRE pipeline.
+        Initialize the PREPFIRE pipeline.
         
         Parameters
         ----------
@@ -166,7 +166,7 @@ class ScenFirePipeline:
         ValueError
             If required parameters are missing or invalid.
         """
-        print(f"------ Initialization of SCENFIRE pipeline for region: {region} ------")
+        print(f"------ Initialization of PREPFIRE pipeline for region: {region} ------")
         # Initialize attributes
         self.region             = region
         self.bound_coords       = bound_coords
@@ -240,7 +240,7 @@ class ScenFirePipeline:
         self._validate_directory_structure()
         self._create_processed_directories()
         
-        logger.info(f"Initialized SCENFIRE pipeline for region: {self.region}")
+        logger.info(f"Initialized PREPFIRE pipeline for region: {self.region}")
         
     def _validate_directory_structure(self):
         """
@@ -308,7 +308,7 @@ class ScenFirePipeline:
             
         Returns
         -------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
             
         Raises
@@ -392,7 +392,7 @@ class ScenFirePipeline:
         
         Returns
         -------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
             
         Raises
@@ -470,7 +470,7 @@ class ScenFirePipeline:
         
         Returns
         -------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
             
         Raises
@@ -540,7 +540,7 @@ class ScenFirePipeline:
         
         Returns
         -------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
             
         Raises
@@ -580,7 +580,7 @@ class ScenFirePipeline:
         
         Returns
         -------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
             
         Raises
@@ -671,7 +671,7 @@ class ScenFirePipeline:
         
         Returns
         -------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
         """
         # Create output directories
@@ -718,7 +718,7 @@ class ScenFirePipeline:
         
         Returns:
         --------
-        self : ScenFirePipeline
+        self : PrepFirePipeline
             For method chaining
         """
         # This function needs to be implemented to run actual fire simulations
@@ -829,7 +829,7 @@ def run_prepare(region, root_dir=None, **kwargs):
     """
     Run the complete fire simulation pipeline.
     
-    This function sets up the project structure and runs the complete SCENFIRE pipeline
+    This function sets up the project structure and runs the complete PREPFIRE pipeline
     for the specified region.
     
     Parameters
@@ -840,8 +840,8 @@ def run_prepare(region, root_dir=None, **kwargs):
         Root directory for the project. If not provided, the current working
         directory will be used.
     **kwargs : dict, optional
-        Additional keyword arguments to pass to the ScenFirePipeline constructor.
-        See ScenFirePipeline.__init__ for more details.
+        Additional keyword arguments to pass to the PrepFirePipeline constructor.
+        See PrepFirePipeline.__init__ for more details.
         
     Returns
     -------
@@ -850,5 +850,5 @@ def run_prepare(region, root_dir=None, **kwargs):
     """
     print(f"--->> Run all in module processes for {region} ------")
     setup_project_structure(region, root_dir=root_dir)
-    pipeline = ScenFirePipeline(region=region, **kwargs)
+    pipeline = PrepFirePipeline(region=region, **kwargs)
     return pipeline.prepare_simulation() 

@@ -1,4 +1,4 @@
-{% set name = "scenfire" %}
+{% set name = "prepfire" %}
 {% set version = "0.1.0" %}
 
 package:
@@ -8,7 +8,7 @@ package:
 source:
   path: .
   files:
-    - scenfire/
+    - prepfire/
     - setup.py
     - README.md
     - LICENSE
@@ -47,7 +47,7 @@ requirements:
 # Simplified test section - only imports check
 test:
   imports:
-    - scenfire
+    - prepfire
   commands:
     - pip check
   requires:
@@ -57,15 +57,15 @@ test:
     - pytest-cov
 
 about:
-  home: https://github.com/CYglume/SCENFIRE
+  home: https://github.com/CYglume/PREPFIRE
   summary: A Python package for fire simulation and analysis
   description: |
-    SCENFIRE is a Python package for preparing materials for fire simulation and analysis, providing tools for processing fire data, 
+    PREPFIRE is a Python package for preparing materials for fire simulation and analysis, providing tools for processing fire data, 
     weather conditions, and landscape characteristics. The package implements a complete pipeline for fire risk assessment and simulation.
   license: MIT
   license_file: LICENSE
-  dev_url: https://github.com/CYglume/SCENFIRE
-  doc_url: https://github.com/CYglume/SCENFIRE#readme
+  dev_url: https://github.com/CYglume/PREPFIRE
+  doc_url: https://github.com/CYglume/PREPFIRE#readme
   authors:
     - Cheng-Ying Yang
     - Marcos Rodrigues Mimbrero 

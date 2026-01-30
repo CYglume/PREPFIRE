@@ -1,7 +1,7 @@
 """
-SCENFIRE Utilities Module
+PREPFIRE Utilities Module
 
-This module contains utility functions for the SCENFIRE package.
+This module contains utility functions for the PREPFIRE package.
 """
 
 from .helpers import (

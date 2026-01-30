@@ -1,11 +1,13 @@
 """
-SCENFIRE: A Python package for fire simulation and analysis.
+PREPFIRE: A Python package for fire simulation input preparation.
 
-This package provides tools for processing fire data, weather conditions, and landscape characteristics. The package implements a complete pipeline for fire risk assessment and simulation.
+PREPFIRE (PREParation for FIRE simulation) provides tools for processing fire data,
+weather conditions, and landscape characteristics. The package implements a complete
+pipeline for fire risk assessment and simulation input preparation.
 
 Key features include:
 - Fire data processing and analysis
-- Landscape file (lcp) component processing 
+- Landscape file (lcp) component processing
 - Weather data integration with ERA5-Land dataset
 - Weather type clustering and analysis
 - Interactive API key management for weather data
@@ -21,11 +23,15 @@ __author__ = 'Cheng-Ying Yang, Marcos Rodrigues Mimbrero'
 __authors__ = ['Cheng-Ying Yang', 'Marcos Rodrigues Mimbrero']
 __email__ = 'rmarcos@unizar.es'
 
-from .pipeline import ScenFirePipeline, setup_project_structure, run_prepare
+from .pipeline import PrepFirePipeline, setup_project_structure, run_prepare
 from .core import raster, weather, clustering
 
+# Backward compatibility alias
+PrepFirePipeline = PrepFirePipeline
+
 __all__ = [
-    'ScenFirePipeline',
+    'PrepFirePipeline',
+    'PrepFirePipeline',  # Backward compatibility
     'setup_project_structure',
     'run_prepare',
     'raster',
