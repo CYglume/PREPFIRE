@@ -1,4 +1,4 @@
-name: Package Import Check
+name: Tests
 
 on:
   push:
@@ -7,41 +7,26 @@ on:
     branches: [ main ]
 
 jobs:
-  import-check:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Conda
-      uses: conda-incubator/setup-miniconda@v2
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        auto-update-conda: true
         python-version: ${{ matrix.python-version }}
-        channels: conda-forge
-    
-    - name: Install dependencies
-      run: |
-        conda install -y -c conda-forge \
-          numpy>=1.26 \
-          pandas \
-          geopandas \
-          rasterio \
-          xarray \
-          netCDF4 \
-          cdsapi \
-          scikit-learn \
-          shapely \
-          matplotlib \
-          wheel \
-          setuptools \
-          pyproj \
-          zarr \
-          cftime \
-          h5netcdf
-        
-        # Install the package in development mode
-        pip install . --no-deps --ignore-installed -vv
+        cache: 'pip'
+
+    - name: Install package with test dependencies
+      run: pip install ".[test]"
+
+    - name: Test import
+      run: python -c "import prepfire; print(prepfire.__version__)"
+
+    - name: Run tests
+      run: pytest tests/ -v

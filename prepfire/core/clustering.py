@@ -1,14 +1,18 @@
-import pandas as pd
-import numpy as np
-import geopandas as gpd
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+import logging
 import os
 
-def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T', 'RH', 'WS', 'DFMC']):
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+logger = logging.getLogger(__name__)
+
+def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T', 'RH', 'WS', 'DFMC'], n_threads=None):
     """
     Performs K-means clustering on fire weather data to identify distinct weather patterns.
-    
+
     Parameters
     ----------
     fire_weather : pandas.DataFrame
@@ -17,12 +21,15 @@ def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T
         Minimum number of clusters to use if optimal number is lower
     max_n : int, optional (default=10)
         Maximum number of clusters to test when finding optimal number
-        
+    n_threads : int, optional (default=None)
+        Number of threads for OpenMP parallelism in KMeans. If None, the
+        environment default is used (no override).
+
     Returns
     -------
     sklearn.cluster.KMeans
         Fitted KMeans clustering model using the optimal number of clusters
-        
+
     Notes
     -----
     This function:
@@ -30,19 +37,20 @@ def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T
     2. Finds the optimal number of clusters using silhouette score analysis
     3. Performs K-means clustering with the optimal number of clusters
     4. Returns the fitted KMeans model
-    
+
     The optimal number of clusters is determined by finding the maximum silhouette score
     among possible cluster numbers. If the optimal number is less than min_n, min_n is used instead.
     """
-    print("Clustering...")
+    logger.info("Clustering...")
     clust_data = fire_weather[weather_variable]
     scaled_data = (clust_data - clust_data.mean()) / clust_data.std()
 
     # Find optimal number of clusters using silhouette score
     silhouette_scores = []
-    possible_n = range(2, max_n)
+    possible_n = range(2, max_n + 1)
 
-    os.environ["OMP_NUM_THREADS"] = '3'
+    if n_threads is not None:
+        os.environ["OMP_NUM_THREADS"] = str(int(n_threads))
     for n in possible_n:
         km = KMeans(n_clusters=n, n_init=25, random_state=0)
         labels = km.fit_predict(scaled_data)
@@ -51,12 +59,12 @@ def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T
     # Find the index of the maximum silhouette score
     n_max = possible_n[np.argmax(silhouette_scores)]
     if n_max < min_n:
-        print("Optimal number of clusters is lower than min_n:", min_n)
-        print("Using minimum number of clusters.")
+        logger.info("Optimal number of clusters is lower than min_n: %d", min_n)
+        logger.info("Using minimum number of clusters.")
         n_max = min_n
 
-    print("Silhouette Scores:", silhouette_scores)
-    print("Optimal Number of Clusters:", n_max)
+    logger.info("Silhouette Scores: %s", silhouette_scores)
+    logger.info("Optimal Number of Clusters: %d", n_max)
 
     # Perform KMeans clustering with the optimal number of clusters
     km = KMeans(n_clusters=n_max, n_init=25, random_state=0)
@@ -115,18 +123,16 @@ def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_
     # Calculate cluster summary
     if isinstance(extreme_percentile, tuple | list | np.ndarray):
         # ------------------------- Extensive percentile groups -------------------------
-        # add p0 and p100 for full coverage
-        extreme_percentile.extend([0,100])
-        extreme_percentile = sorted(set(extreme_percentile)) # remove duplicated values
-        
+        # add p0 and p100 for full coverage — work on a copy to avoid mutating the caller's list
+        extreme_percentile = sorted(set(list(extreme_percentile) + [0, 100]))
+
+        output_parts = []
         for i in range(len(extreme_percentile)-1):
             ext_pt = extreme_percentile[i:i+2] # get every two values in list
             cluster_summary = weatherAggregate(weather_types, ext_pt).drop(columns=['freq_cluster'])
             cluster_summary[[wvar+'_pt' for wvar in weather_variable]] = i
-            if 'output_pd' not in locals():
-                output_pd = cluster_summary 
-            else:
-                output_pd = pd.concat([output_pd, cluster_summary], ignore_index=True)
+            output_parts.append(cluster_summary)
+        output_pd = pd.concat(output_parts, ignore_index=True)
 
         intervals = pd.IntervalIndex.from_breaks(
             extreme_percentile,
@@ -175,14 +181,14 @@ def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_
             i += 1
             outName = os.path.join(weather_dir, f"{fname}-{i}.csv")        
         if i != 0:
-            print(f"File exists for {fname}.csv! Save as {fname}-{i}.csv")
+            logger.warning("File exists for %s.csv! Save as %s-%d.csv", fname, fname, i)
             
         table.to_csv(outName,
                      index=False)
 
 
         
-    print("\n--> Weather data done")
+    logger.info("--> Weather data done")
 
 def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_filename, out_crs = None, num_points = 500000):
     """
@@ -241,8 +247,8 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
     """
     # 3. Check if output file already exists to prevent accidental overwrites
     if os.path.exists(sampletxt_output_filename):
-        print(f"Output file '{sampletxt_output_filename}' already exists. Skipping generation.")
-        print("--> Fire ignition points done")
+        logger.info("Output file '%s' already exists. Skipping generation.", sampletxt_output_filename)
+        logger.info("--> Fire ignition points done")
         return
 
     # 4. Generate random points within the polygon using sample_points()
@@ -254,9 +260,9 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
         foo_multipoint_series = gdf_boundary.geometry.sample_points(500000)
 
     except Exception as e:
-        print(f"Error generating points with sample_points(): {e}")
-        print("This might happen if the geometry is invalid or too small to generate the requested number of points.")
-        print("--> Fire ignition points failed")
+        logger.error("Error generating points with sample_points(): %s", e)
+        logger.error("This might happen if the geometry is invalid or too small to generate the requested number of points.")
+        logger.error("--> Fire ignition points failed")
         return
 
 
@@ -268,11 +274,11 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
 
     # Check if fewer points than requested were generated
     if len(gdf_points) < num_points:
-        print(f"Warning: Only {len(gdf_points)} points were generated by sample_points(), instead of the requested {num_points}.")
+        logger.warning("Only %d points were generated by sample_points(), instead of the requested %d.", len(gdf_points), num_points)
 
     # 6. Reproject to output CRS if specified
     if out_crs is not None and gdf_points.crs != out_crs:
-        print(f"Reprojecting points from {gdf_points.crs.to_string()} to {out_crs}...")
+        logger.info("Reprojecting points from %s to %s...", gdf_points.crs.to_string(), out_crs)
         gdf_points = gdf_points.to_crs(crs=out_crs)
 
     # 7. Create FIRE_NUM, XStart, and YStart columns (maintaining exact output format)
@@ -283,8 +289,8 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
     # 8. Export to CSV file with the required columns
     gdf_points[['FIRE_NUM', 'XStart', 'YStart']].to_csv(sampletxt_output_filename, index=False)
     
-    print("Sampled CSV file exported.")
-    print("--> Fire ignition points done.")
+    logger.info("Sampled CSV file exported.")
+    logger.info("--> Fire ignition points done.")
 
 # Internal function
 def weatherAggregate(weather_tp, ext_percentile, weather_variables = ['T', 'RH', 'WS', 'DFMC']):

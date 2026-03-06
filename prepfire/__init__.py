@@ -18,7 +18,11 @@ Key features include:
 The output files are intended for fire ignition simulation in FlamMap algorithm.
 """
 
-__version__ = '0.1.0'
+try:
+    from importlib.metadata import version as _version
+    __version__ = _version("prepfire")
+except Exception:
+    __version__ = '0.1.0'
 __author__ = 'Cheng-Ying Yang, Marcos Rodrigues Mimbrero'
 __authors__ = ['Cheng-Ying Yang', 'Marcos Rodrigues Mimbrero']
 __email__ = 'rmarcos@unizar.es'
@@ -26,12 +30,9 @@ __email__ = 'rmarcos@unizar.es'
 from .pipeline import PrepFirePipeline, setup_project_structure, run_prepare
 from .core import raster, weather, clustering
 
-# Backward compatibility alias
-PrepFirePipeline = PrepFirePipeline
 
 __all__ = [
     'PrepFirePipeline',
-    'PrepFirePipeline',  # Backward compatibility
     'setup_project_structure',
     'run_prepare',
     'raster',

@@ -47,11 +47,6 @@ from .core.raster import (
 from .core import clustering, raster, weather
 from .utils import helpers
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 class PrepFirePipeline:
@@ -223,6 +218,7 @@ class PrepFirePipeline:
         
         # Store intermediate results
         self.fires_gdf = None
+        self.fires_gdf_WGS84 = None
         self.bound_extent = None
         self.buffered_bound_extent = None
         self.km_model = None
@@ -230,10 +226,11 @@ class PrepFirePipeline:
         self.lcp_file = None
         self.output_files = {}
         
-        # Configure logging
+        # Configure logging (sets root logger level; only effective if no handlers exist yet)
         logging.basicConfig(
-            level=getattr(logging, self.log_level),
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            level=getattr(logging, self.log_level.upper()),
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            force=True,  # override any earlier basicConfig call
         )
         
         # Check directory structure
@@ -377,7 +374,7 @@ class PrepFirePipeline:
         
         if plot_fires:
             fig, ax = plt.subplots(figsize=(10, 10))
-            self.fires_gdf.plot(ax=ax, color='red', markersize=10)
+            self.fires_gdf.to_crs(epsg=4326).plot(ax=ax, color='red', markersize=10)
             ax.set_xlabel('Longitude')
             ax.set_ylabel('Latitude')
             plt.show()
@@ -687,11 +684,12 @@ class PrepFirePipeline:
             weather_dir=self.weather_dir,
             fms_out_dir=fms_dir,
             liveHerb=self.livePlantMoist[0],
-            liveWood=self.livePlantMoist[1]
+            liveWood=self.livePlantMoist[1],
+            extreme_percentile=self.extreme_percentile,
         )
         
         # Produce ignition probability raster
-        fire_files = [f for f in os.listdir(self.input_data_path) if f.endswith('.shp')]
+        fire_files = [f for f in os.listdir(self.input_data_path) if f.endswith(('.shp', '.gpkg'))]
         fires_f = os.path.join(self.input_data_path, fire_files[0])
         
         kde_file = os.path.join(self.processed_data_path, "Ignition", "ig_kde.tif")

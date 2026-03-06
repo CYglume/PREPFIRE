@@ -10,11 +10,6 @@ import math
 import logging
 from ..utils.helpers import rh_calc, vpd_calc, dfmc_calc, dfmc_vpd_calc
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 def get_bound_extent(bound_box: list[float] | tuple[float, float, float, float] | gpd.GeoDataFrame,
@@ -187,7 +182,7 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bo
         if not cdsAPI_KEY:
             raise ValueError("CDS API key is required for weather data download")
 
-    print("\nDownloading weather data...")
+    logger.info("Downloading weather data...")
     t = gdf[date_column].tolist()
     date_range = [min(t).strftime("%Y-%m-%d"), max(t).strftime("%Y-%m-%d")]
 
@@ -195,8 +190,8 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bo
     bounds_wgs = bounds_wgs.to_crs(epsg=4326).total_bounds
     # Reorder to CDS format [ymax, xmin, ymin, xmax]
     area_extract_cds = [bounds_wgs[3], bounds_wgs[0], bounds_wgs[1], bounds_wgs[2]]
-    print(bounds_wgs)
-    print(area_extract_cds)
+    logger.debug("Bounds WGS84: %s", bounds_wgs)
+    logger.debug("Area extract CDS: %s", area_extract_cds)
 
     dates_by_month = dict()
     days_fire = pd.date_range(start=date_range[0], end=date_range[1], freq='D')
@@ -220,15 +215,15 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bo
 
         firstRun = True
         for var in var_weather:
-            print(f"\n...Downloading {var}...")
+            logger.info("Downloading %s...", var)
             if os.path.exists(os.path.join(processed_path,"Weather", f"era5_{var}.nc")):
-                print("Exists: ", os.path.join(processed_path,"Weather", f"era5_{var}.nc"))
+                logger.info("Exists: %s", os.path.join(processed_path,"Weather", f"era5_{var}.nc"))
                 continue
 
             downloaded_files = []
-            print(f"Requesting......")
+            logger.info("Requesting...")
             for (year, month), dayRange in dates_by_month.items():
-                print(f"{year}-{month}", end=" ")
+                logger.info("%s-%s", year, month)
                 output_file = os.path.join(processed_path, "Weather", "CDS", var,
                                             f"era5_land_{year}_{month}_{dayRange[0]}-{dayRange[1]-1}_12UTC.nc")
                 if os.path.exists(output_file):
@@ -256,21 +251,24 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bo
 
                 downloaded_files.append(output_file)
 
-            print("\nMerging NetCDF files...")
+            logger.info("Merging NetCDF files...")
             merged_file = os.path.join(processed_path, "Weather", f"era5_{var}.nc")
             if os.path.exists(merged_file):
-                print(f"File already exists: {merged_file}")
+                logger.info("File already exists: %s", merged_file)
                 continue
 
             datasets = [xr.open_dataset(f, engine='netcdf4') for f in downloaded_files]
             merged = xr.concat(datasets, dim='valid_time')
             merged.to_netcdf(merged_file)
-            print(f"Saved merged NetCDF as {merged_file}\n")
+            for ds in datasets:
+                ds.close()
+            merged.close()
+            logger.info("Saved merged NetCDF as %s", merged_file)
 
-        print("Extraction from CDS API finished")
+        logger.info("Extraction from CDS API finished")
         return True
     else:
-        print("Weather data not fetched")
+        logger.info("Weather data not fetched")
         return False
 
 def weather_data_processing(weather_dir, in_cds_time="valid_time", in_cds_x = 'longitude',in_cds_y = 'latitude', check_rh = False):
@@ -295,12 +293,12 @@ def weather_data_processing(weather_dir, in_cds_time="valid_time", in_cds_x = 'l
     dict
         Dictionary of saved file paths for each weather variable
     """
-    print("Start calculating weather data...")
-    # Load input variables
-    temp = xr.open_dataset(os.path.join(weather_dir,"era5_2m_temperature.nc"), engine='netcdf4')
-    tempd = xr.open_dataset(os.path.join(weather_dir,"era5_2m_dewpoint_temperature.nc"), engine='netcdf4')
-    wind_u = xr.open_dataset(os.path.join(weather_dir,"era5_10m_u_component_of_wind.nc"), engine='netcdf4')
-    wind_v = xr.open_dataset(os.path.join(weather_dir,"era5_10m_v_component_of_wind.nc"), engine='netcdf4')
+    logger.info("Start calculating weather data...")
+    # Load input variables — closed explicitly before returning
+    temp   = xr.open_dataset(os.path.join(weather_dir, "era5_2m_temperature.nc"), engine='netcdf4')
+    tempd  = xr.open_dataset(os.path.join(weather_dir, "era5_2m_dewpoint_temperature.nc"), engine='netcdf4')
+    wind_u = xr.open_dataset(os.path.join(weather_dir, "era5_10m_u_component_of_wind.nc"), engine='netcdf4')
+    wind_v = xr.open_dataset(os.path.join(weather_dir, "era5_10m_v_component_of_wind.nc"), engine='netcdf4')
 
     # Convert temperatures from K to °C
     temp = temp - 273
@@ -344,32 +342,21 @@ def weather_data_processing(weather_dir, in_cds_time="valid_time", in_cds_x = 'l
     }
 
     if check_rh:
-        # Abre el archivo NetCDF
         ds = rh
-        # Muestra las variables disponibles en el archivo
-        print(ds)
-        # Selecciona la variable de interés (ajústala según el contenido del NetCDF)
-        variable = "rh"  # Por ejemplo, temperatura a 2m (ajustar según el caso)
-        datos = ds.values  # Extrae los valores como un array de NumPy
+        logger.debug("RH dataset: %s", ds)
+        data = ds.values.flatten()
+        data = data[~np.isnan(data)]
 
-        # Aplanar los datos para obtener una lista de valores
-        datos = datos.flatten()
-
-        # Filtrar valores NaN (si los hay)
-        datos = datos[~np.isnan(datos)]
-
-        # Crear el histograma
-        plt.figure(figsize=(8,6))
-        plt.hist(datos, bins=50, color='royalblue', edgecolor='black', alpha=0.7)
-
-        # Etiquetas y título
-        plt.xlabel("Valor de la variable")
-        plt.ylabel("Frecuencia")
-        plt.title("Histograma de la variable " + variable)
-
-        # Mostrar la gráfica
+        plt.figure(figsize=(8, 6))
+        plt.hist(data, bins=50, color='royalblue', edgecolor='black', alpha=0.7)
+        plt.xlabel("Value")
+        plt.ylabel("Frequency")
+        plt.title("Histogram of Relative Humidity")
         plt.show()
-    return save_weather_data(weather_data, weather_dir, in_cds_time)
+    result = save_weather_data(weather_data, weather_dir, in_cds_time)
+    for ds in (temp, tempd, wind_u, wind_v):
+        ds.close()
+    return result
 
 def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_column = 'Year', dfmc_type = 'rh', **kwargs):
     """
@@ -402,35 +389,58 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
     wdir = xr.open_dataset(os.path.join(weather_dir, "wdir.nc"), engine='netcdf4')
     rh = xr.open_dataset(os.path.join(weather_dir, "rh.nc"), engine='netcdf4')
     if (dfmc_type == 'rh'):
-        print("Use dfmc calculated from RH.....")
+        logger.info("Use dfmc calculated from RH")
         dfmc = xr.open_dataset(os.path.join(weather_dir, "dfmc.nc"), engine='netcdf4')
     elif (dfmc_type == 'vpd'):
-        print("Use dfmc calculated from VPD.....")
+        logger.info("Use dfmc calculated from VPD")
         dfmc = xr.open_dataset(os.path.join(weather_dir, "dfmc_vpd.nc"), engine='netcdf4')
     else:
         raise ValueError("'dfmc_type' should be either 'rh' or 'vpd'!")
     
-    # Convert temperatures from K to °C
-    temp = temp - 273
-    tempd = tempd - 273
+    # Resolve kwargs for dimension names (mirrors get_fire_weather defaults)
+    in_cds_time = kwargs.get('in_cds_time', 'valid_time')
+    in_x        = kwargs.get('in_x',        'longitude')
+    in_y        = kwargs.get('in_y',        'latitude')
 
-    # Extract data at the location/date of each fire
-    temp_ext = [get_fire_weather(x, fires_gdf_wgs, temp, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
-    tempd_ext = [get_fire_weather(x, fires_gdf_wgs, tempd, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
-    wind_ext = [get_fire_weather(x, fires_gdf_wgs, wspeed, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
-    wind_dir = [get_fire_weather(x, fires_gdf_wgs, wdir, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
-    rh_ext = [get_fire_weather(x, fires_gdf_wgs, rh, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
-    dfmc_ext = [get_fire_weather(x, fires_gdf_wgs, dfmc, date_column, **kwargs) for x in range(len(fires_gdf_wgs))]
+    # Sort fires by date so disk seeks are always forward (sequential I/O benefit).
+    # Track original positions to restore the caller's row order in the output.
+    fires_sorted = fires_gdf_wgs.copy()
+    fires_sorted['_orig_idx'] = np.arange(len(fires_sorted))
+    fires_sorted = fires_sorted.sort_values(date_column).reset_index(drop=True)
 
-    # Combine datasets
+    # Pre-allocate result arrays; NaN marks fires whose date has no ERA5 match
+    n = len(fires_sorted)
+    extract_results = {col: np.full(n, np.nan) for col in ['T', 'TD', 'WS', 'WD', 'RH', 'DFMC']}
+
+    # Group by date: one time-slice disk read per variable per unique date,
+    # then vectorised spatial extraction for all fires sharing that date.
+    # Peak memory = one 2-D spatial slice (~90 KB for a typical domain) — same as before.
+    for date_val, group in fires_sorted.groupby(date_column):
+        ts   = pd.Timestamp(date_val)
+        idxs = group['_orig_idx'].values          # positions into res arrays
+        lons = xr.DataArray(group.geometry.x.values, dims='pts')
+        lats = xr.DataArray(group.geometry.y.values, dims='pts')
+
+        def _extract(ds, var_name):
+            sl = ds.sel({in_cds_time: ts}, method='nearest')
+            return sl.sel({in_x: lons, in_y: lats}, method='nearest')[var_name].values
+
+        extract_results['T'   ][idxs] = _extract(temp,   't2m')    - 273
+        extract_results['TD'  ][idxs] = _extract(tempd,  'd2m')    - 273
+        extract_results['WS'  ][idxs] = _extract(wspeed, 'wspeed')
+        extract_results['WD'  ][idxs] = _extract(wdir,   'wdir')
+        extract_results['RH'  ][idxs] = _extract(rh,     'rh')
+        extract_results['DFMC'][idxs] = _extract(dfmc,   'dfmc')
+
+    # Close all open datasets
+    for ds in (temp, tempd, wspeed, wdir, rh, dfmc):
+        ds.close()
+
+    # Rebuild DataFrame in original fire order and drop rows without ERA5 coverage
     fire_weather = pd.DataFrame(fires_gdf_wgs)
     org_colNum = fire_weather.shape[1]
-    fire_weather['T'] = [float(arr.t2m.values) for arr in temp_ext]
-    fire_weather['TD'] = [float(arr.d2m.values) for arr in tempd_ext]
-    fire_weather['WS'] = [float(arr.wspeed.values) for arr in wind_ext]
-    fire_weather['WD'] = [float(arr.wdir.values) for arr in wind_dir]
-    fire_weather['RH'] = [float(arr.rh.values) for arr in rh_ext]
-    fire_weather['DFMC'] = [float(arr.dfmc.values) for arr in dfmc_ext]
+    for col, arr in extract_results.items():
+        fire_weather[col] = arr
     fire_weather = fire_weather.dropna(subset=fire_weather.columns[org_colNum:])
 
 
@@ -474,7 +484,7 @@ def save_weather_data(weather_data, weather_dir, in_cds_time="valid_time"):
     dict
         Dictionary of saved file paths for each weather variable
     """
-    print("Saving weather data...")
+    logger.info("Saving weather data...")
     metadata = weather_data['metadata']
     saved_files = {}
     
@@ -490,6 +500,6 @@ def save_weather_data(weather_data, weather_dir, in_cds_time="valid_time"):
         ds.close()
         saved_files[var_name] = output_file
     
-    print("Weather data saved")
-    print(saved_files)
+    logger.info("Weather data saved")
+    logger.debug("Saved files: %s", saved_files)
     return saved_files

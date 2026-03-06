@@ -17,16 +17,53 @@ The output files are intended for the fire spread simulation in FlamMap algorith
 
 ## Installation
 
-The package is available through conda-forge:
+### From GitHub (recommended)
+
+Install directly from the repository:
 
 ```bash
-conda install -c conda-forge prepfire
+pip install git+https://github.com/CYglume/PREPFIRE.git
+```
+
+To install a specific release version:
+
+```bash
+pip install git+https://github.com/CYglume/PREPFIRE.git@v0.1.0
+```
+
+### From GitHub Release
+
+Download the `.whl` file from the [Releases page](https://github.com/CYglume/PREPFIRE/releases) and install it:
+
+```bash
+pip install prepfire-0.1.0-py3-none-any.whl
+```
+
+Or install directly from the release URL:
+
+```bash
+pip install https://github.com/CYglume/PREPFIRE/releases/download/v0.1.0/prepfire-0.1.0-py3-none-any.whl
+```
+
+<!-- ### From PyPI (not yet available)
+```bash
+pip install prepfire
+``` -->
+
+### For development
+
+Clone the repository and install in editable mode:
+
+```bash
+git clone https://github.com/CYglume/PREPFIRE.git
+cd PREPFIRE
+pip install -e ".[test]"
 ```
 
 ## Project Structure
 
 ```
-scenfire_project/
+prepfire_project/
 ├── input_data/
 │   └── region/
 │       ├── fires.shp               # (Required) Vector map for historical fire ignition points
@@ -57,13 +94,13 @@ scenfire_project/
 import prepfire
 
 # Set up initial project folder if data is not prepared as desired folder structure
-prepfire.pipeline.setup_project_structure(
-    region,                      # Required: Name of the region folder
+prepfire.setup_project_structure(
+    "your_region",               # Required: Name of the region folder
     root_dir="path/to/project",  # Optional: Project root directory (defaults to current directory)
 )
 
 # Initialize the pipeline object
-user_pipeline = prepfire.pipeline.PrepFirePipeline(
+user_pipeline = prepfire.PrepFirePipeline(
     region="your_region",           # Required: Name of the region folder
     root_dir="path/to/project",     # Optional: Project root directory (defaults to current directory)
     bound_coords=None,                 # Optional: Bounding box coordinates [xmin, ymin, xmax, ymax]. Default by using extent of fire.shp or cropping polygon (if provided)
@@ -97,7 +134,7 @@ results = user_pipeline.prepare_simulation()
 # ---------------------------------------------------------------------------------- #
 
 # Or use the quick run function (Run starting from setup_project_structure)
-results = run_prepare(
+results = prepfire.run_prepare(
     region="your_region",        # Required: Name of the region folder
     root_dir="path/to/project",  # Optional: Project root directory
     **kwargs                     # Optional: Additional keyword arguments for PrepFirePipeline
@@ -106,7 +143,7 @@ results = run_prepare(
 
 ### Pipeline Methods
 
-The module provide three main functions:
+The module provides three main functions:
 - `setup_project_structure`: Create the folder structure for input datasets
 - `PrepFirePipeline`: Create the pipeline object for quick processing datasets (load local data)
   - `PrepFirePipeline.prepare_simulation()` Main function under pipeline object to run all processing functions
@@ -145,7 +182,7 @@ If no API key is provided, the program will prompt you to enter it interactively
 
 
 ### Bounding box
-The argument `bound_coords` in `prepfire.pipeline.PrepFirePipeline` takes care of the extent being used for cropping the processed area:
+The argument `bound_coords` in `prepfire.PrepFirePipeline` takes care of the extent being used for cropping the processed area:
 
 1. `bound_coords = [xmin, ymin, xmax, ymax]`: Provide quick solution to manually set up bounding coords in degree with default EPSG:4326
 
@@ -163,12 +200,52 @@ The CSV table (file path: `path/to/fire_weather.csv`) should at least contains t
 
 Corresponding column names should be assigned to the object correctly
 ```Python
-prepfire.pipeline.PrepFirePipeline(
+prepfire.PrepFirePipeline(
     col_fire_size    = "Fire_size_in_ha",
     col_fire_date    = "Date",
     weather_variable = ['Temperature', 'RH', 'Wind_speed'],
     fire_weather     = "path/to/fire_weather.csv"
 )
+```
+
+## Testing
+
+Tests verify that the package imports correctly and core functions produce expected outputs using synthetic data — no network access or large input files required.
+
+**Setup** (one-time): install the package in editable mode with test dependencies. This lets you modify source code and test changes without reinstalling.
+
+```bash
+cd path/to/PREPFIRE
+pip install -e ".[test]"
+```
+
+> **Windows note:** If `pip` is not recognized, use `python -m pip` instead (e.g., `python -m pip install -e ".[test]"`). This ensures the correct Python interpreter is used, especially when multiple versions are installed.
+
+> **GDAL on Windows:** If installation fails with build errors on `rasterio` or `geopandas`, these packages require the GDAL C library. The easiest fix is to install pre-built wheels before installing prepfire:
+> ```bash
+> pip install --only-binary :all: rasterio geopandas
+> pip install -e ".[test]"
+> ```
+> The `--only-binary :all:` flag forces pip to use pre-compiled wheels instead of attempting to build from source. If no compatible wheel is found for your Python version, try upgrading pip (`pip install --upgrade pip`) or use [conda](https://docs.conda.io/) which bundles GDAL automatically.
+
+**Run tests:**
+
+```bash
+pytest tests/ -v              # Run all tests with verbose output
+pytest tests/ -v -k "Clustering"  # Run only tests matching a keyword
+pytest tests/ -v -x           # Stop on first failure (useful for debugging)
+```
+
+A successful run prints green `PASSED` for each test. If a test fails, pytest shows the exact assertion and traceback to help locate the issue.
+
+**Local build test:** To verify the full build-and-install cycle locally, see the scripts in [`scripts/`](scripts/) (`local_build_test.sh` for Linux/macOS/Git Bash, `local_build_test.bat` for Windows).
+
+**Cleanup:** Testing generates cache files that are safe to delete:
+
+```bash
+# Remove pytest and Python caches (auto-regenerated on next run)
+rm -rf .pytest_cache
+find . -type d -name "__pycache__" -exec rm -rf {} +
 ```
 
 ## Acknowledgments

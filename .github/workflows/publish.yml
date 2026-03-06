@@ -1,0 +1,64 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  # First, run import check
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install and test
+      run: |
+        pip install .
+        python -c "import prepfire; print(prepfire.__version__)"
+
+  # Then build and publish
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    # --- OPTION A: Upload built files to GitHub Release ---
+    permissions:
+      contents: write  # Required to upload release assets
+
+    # --- OPTION B: Publish to PyPI (trusted publishing) ---
+    # permissions:
+    #   id-token: write  # Required for trusted publishing
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install build tools
+      run: pip install build
+
+    - name: Build package
+      run: python -m build
+
+    # --- OPTION A: Upload built files to GitHub Release ---
+    - name: Upload release assets
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: gh release upload ${{ github.ref_name }} dist/* --clobber
+
+    # --- OPTION B: Publish to PyPI (trusted publishing) ---
+    # - name: Publish to PyPI
+    #   uses: pypa/gh-action-pypi-publish@release/v1

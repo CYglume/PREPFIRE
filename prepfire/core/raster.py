@@ -1,10 +1,14 @@
+import logging
+import os
+
+import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio
 import rasterio.warp
 from scipy.stats import gaussian_kde
-import pandas as pd
-import geopandas as gpd
-import os
+
+logger = logging.getLogger(__name__)
 
 # Public functions
 
@@ -92,7 +96,7 @@ def process_raster(input_raster_path, output_raster_path, gdf_bbox, new_crs='EPS
         with rasterio.open(output_raster_path, 'w', **kwargs) as dst:
             dst.write(destination, 1)
     
-    print(f"Raster has been processed and saved to: {output_raster_path}")
+    logger.info("Raster has been processed and saved to: %s", output_raster_path)
 
 def crop_raster_to_bbox(input_raster_path, output_raster_path, gdf_bbox):
     """
@@ -147,7 +151,7 @@ def crop_raster_to_bbox(input_raster_path, output_raster_path, gdf_bbox):
         with rasterio.open(output_raster_path, 'w', **kwargs) as dst:
             dst.write(data, 1)
 
-    print(f"Raster has been cropped and saved to: {output_raster_path}")
+    logger.info("Raster has been cropped and saved to: %s", output_raster_path)
 
 def build_lcp_file(input_folder, output_file, lcp_comp = ['elevation', 'slope', 'aspect', 'fuel', 'canopyCover', 'canopyHeight', 'cbh', 'cbd']):
     """
@@ -218,12 +222,12 @@ def build_lcp_file(input_folder, output_file, lcp_comp = ['elevation', 'slope', 
             dest.write(layers[lcp_comp[idx]], idx + 1)
             dest.update_tags(idx + 1, DESCRIPTION=layer_names[lcp_comp[idx]])
 
-    print("LCP file built: "+output_file) 
+    logger.info("LCP file built: %s", output_file)
 
-def produce_fms(fuel_raster_path, weather_dir, fms_out_dir, liveHerb = 60, liveWood = 90):
+def produce_fms(fuel_raster_path, weather_dir, fms_out_dir, liveHerb=60, liveWood=90, extreme_percentile=95):
     """
     Produce fuel moisture scenario (FMS) files based on weather type data.
-    
+
     Parameters
     ----------
     fuel_raster_path : str
@@ -236,40 +240,52 @@ def produce_fms(fuel_raster_path, weather_dir, fms_out_dir, liveHerb = 60, liveW
         Moisture condition for live herbaceous plants
     liveWood : int, optional (default = 90)
         Moisture condition for live woody plants
-        
+    extreme_percentile : int | float | list | tuple, optional (default = 95)
+        Must match the value used in output_weather_types() so the correct
+        output CSV filenames are resolved. Int/float → extreme + mean CSVs;
+        list/tuple → extensive percentile group CSV.
+
     Returns
     -------
     None
-        Creates FMS files for both extreme and mean weather scenarios
-        
+        Creates FMS files for the weather scenarios found in weather_dir.
+
     Notes
     -----
     This function:
     1. Extracts unique fuel types from the fuel raster
-    2. Creates FMS files for both extreme and mean weather scenarios
+    2. Resolves the correct weather type CSV filenames based on extreme_percentile type
     3. Uses write_fms() to generate the actual FMS files
     """
     # Open template raster and read first band
     with rasterio.open(fuel_raster_path) as src:
         band = src.read(1)
+        nodata_value = src.nodata
 
     # Get unique fuel type values, excluding nodata
     fuels = np.unique(band.astype(int))
-    nodata_value = src.nodata
     if nodata_value is not None:
-        fuels = fuels[fuels != nodata_value]
+        fuels = fuels[fuels != int(nodata_value)]
 
-    # Fuel moisture content (FMS)
-    if not os.path.exists(fms_out_dir):
-        os.makedirs(fms_out_dir)
-        print(f"Created directory: {fms_out_dir}")
+    os.makedirs(fms_out_dir, exist_ok=True)
+
+    # Resolve the correct CSV filenames based on what output_weather_types() produced
+    if isinstance(extreme_percentile, (list, tuple, np.ndarray)):
+        weather_files = [
+            (os.path.join(weather_dir, "Extensive_percentile_group_weather_scenarios.csv"), "extensive"),
+        ]
     else:
-        print(f"Using existing directory: {fms_out_dir}")
+        p = int(extreme_percentile)
+        weather_files = [
+            (os.path.join(weather_dir, f"p{p}_extreme_weather_types.csv"), "extreme"),
+            (os.path.join(weather_dir, "all_mean_weather_types.csv"), "mean"),
+        ]
 
-    # Generate FMS files for extreme and mean weather scenarios
-    for wtype in ["extreme", "mean"]:
-        weather_type_path = os.path.join(weather_dir, f"{wtype}_weather_types.csv")
-        print(f"Using weather type file: {weather_type_path}")
+    for weather_type_path, wtype in weather_files:
+        if not os.path.exists(weather_type_path):
+            logger.warning("Weather type file not found, skipping: %s", weather_type_path)
+            continue
+        logger.info("Using weather type file: %s", weather_type_path)
         write_fms(weather_type_path, fms_out_dir, fuels, liveHerb, liveWood, wtype)
 
 def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster, KDE_bw = 0.1):
@@ -356,7 +372,7 @@ def produce_ignition_prob_KDE(fires_f, template_raster_path, output_raster, KDE_
     ) as dst:
         dst.write(Z, 1)
 
-    print(f"KDE probability surface saved to: {output_raster}") 
+    logger.info("KDE probability surface saved to: %s", output_raster)
 
 # Internal functions
 
@@ -391,8 +407,8 @@ def write_fms(input_wt_fn, output_fms_dir, f_types, liveHerb = 60, liveWood = 90
     The formula used is: q = int(round(4.37 + 0.161*RH - 0.1*T - 0.027*RH, 0))
     where RH is relative humidity and T is temperature.
     """
-    # Read weather type data
-    wt = pd.read_csv(input_wt_fn, sep=";", decimal=",")
+    # Read weather type data (saved by output_weather_types with default comma separator)
+    wt = pd.read_csv(input_wt_fn)
     
     # Generate FMS file for each weather type cluster
     for i in range(len(wt)):

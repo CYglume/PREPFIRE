@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prepfire"
+version = "0.1.0"
+description = "A Python framework for automated fire simulation input preparation"
+readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [
+    {name = "Cheng-Ying Yang"},
+    {name = "Marcos Rodrigues Mimbrero", email = "rmarcos@unizar.es"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "pandas",
+    "geopandas",
+    "rasterio",
+    "xarray",
+    "netCDF4",
+    "cdsapi",
+    "scipy",
+    "scikit-learn",
+    "shapely",
+    "matplotlib",
+    "pyproj",
+    "zarr",
+    "cftime",
+    "h5netcdf"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/CYglume/PREPFIRE"
+Repository = "https://github.com/CYglume/PREPFIRE"
