@@ -37,6 +37,7 @@ docs/
 *.tif
 *.shp
 *.csv
+!tests/fixtures/*.csv
 *.fms
 
 # Conda
