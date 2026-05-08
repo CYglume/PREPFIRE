@@ -252,3 +252,6 @@ find . -type d -name "__pycache__" -exec rm -rf {} +
 
 - Copernicus Climate Data Store for weather data
 - Contributors and maintainers
+
+## Funding and supporting projects
+This work was financed by the projects FireCycle (CNS2023-144228) funded by the Spanish Ministry of Science and Innovation (MCIN/AEI/10.13039/501100011033) and project “Understanding Wildfire Risk: A Local-Scale Assessment Framework in Chile”, financed by the AXA Research Fund. The work has been also supported by project FLARE (PID2023-148568OB-I00).
