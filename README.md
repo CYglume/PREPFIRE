@@ -17,18 +17,10 @@ The output files are intended for the fire spread simulation in FlamMap algorith
 
 ## Installation
 
-### From GitHub (recommended)
-
-Install directly from the repository:
+### From PyPI (recommended)
 
 ```bash
-pip install git+https://github.com/CYglume/PREPFIRE.git
-```
-
-To install a specific release version:
-
-```bash
-pip install git+https://github.com/CYglume/PREPFIRE.git@v0.1.0
+pip install prepfire
 ```
 
 ### From GitHub Release
@@ -36,19 +28,22 @@ pip install git+https://github.com/CYglume/PREPFIRE.git@v0.1.0
 Download the `.whl` file from the [Releases page](https://github.com/CYglume/PREPFIRE/releases) and install it:
 
 ```bash
-pip install prepfire-0.1.0-py3-none-any.whl
+pip install prepfire-0.1.1-py3-none-any.whl
 ```
 
 Or install directly from the release URL:
 
 ```bash
-pip install https://github.com/CYglume/PREPFIRE/releases/download/v0.1.0/prepfire-0.1.0-py3-none-any.whl
+pip install https://github.com/CYglume/PREPFIRE/releases/download/v0.1.1/prepfire-0.1.1-py3-none-any.whl
 ```
 
-<!-- ### From PyPI (not yet available)
+### From GitHub
+
+Install the latest development version directly from the repository:
+
 ```bash
-pip install prepfire
-``` -->
+pip install git+https://github.com/CYglume/PREPFIRE.git
+```
 
 ### For development
 

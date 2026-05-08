@@ -30,13 +30,10 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
-    # --- OPTION A: Upload built files to GitHub Release ---
+    environment: pypi
     permissions:
-      contents: write  # Required to upload release assets
-
-    # --- OPTION B: Publish to PyPI (trusted publishing) ---
-    # permissions:
-    #   id-token: write  # Required for trusted publishing
+      id-token: write  # Required for OIDC trusted publishing
+      contents: write  # Required to upload assets to GitHub Release
 
     steps:
     - uses: actions/checkout@v4
@@ -53,12 +50,10 @@ jobs:
     - name: Build package
       run: python -m build
 
-    # --- OPTION A: Upload built files to GitHub Release ---
-    - name: Upload release assets
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+    - name: Upload release assets to GitHub Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: gh release upload ${{ github.ref_name }} dist/* --clobber
-
-    # --- OPTION B: Publish to PyPI (trusted publishing) ---
-    # - name: Publish to PyPI
-    #   uses: pypa/gh-action-pypi-publish@release/v1
