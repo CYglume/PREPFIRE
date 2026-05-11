@@ -4,6 +4,12 @@ PREPFIRE (PREParation for FIRE simulation) is a Python package for preparing mat
 
 The output files are intended for the fire spread simulation in FlamMap algorithm.
 
+![PyPI - Downloads](https://img.shields.io/pypi/dw/prepfire)
+[![PyPI version](https://img.shields.io/pypi/v/prepfire)](https://pypi.org/project/prepfire/)
+<img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/CYglume/PREPFIRE">
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20083868.svg)](https://doi.org/10.5281/zenodo.20083868)
+
+
 ## Features
 
 - Fire data processing and analysis
