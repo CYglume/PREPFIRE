@@ -70,6 +70,13 @@ def process_raster(input_raster_path, output_raster_path, gdf_bbox, new_crs='EPS
         dst_width = int((dst_bounds[2] - dst_bounds[0]) / resolution)
         dst_height = int((dst_bounds[3] - dst_bounds[1]) / resolution)
 
+        # Preserve integer dtypes (categorical data such as fuel codes);
+        # normalise all floating-point sources to float32 (sufficient precision,
+        # avoids float64 bloat from some pan-European fuel map tiles).
+        src_dtype = src.meta.get('dtype', 'float32')
+        out_dtype = src_dtype if np.issubdtype(np.dtype(src_dtype), np.integer) else 'float32'
+        src_nodata = src.nodata
+
         # Prepare metadata
         kwargs = src.meta.copy()
         kwargs.update({
@@ -77,19 +84,21 @@ def process_raster(input_raster_path, output_raster_path, gdf_bbox, new_crs='EPS
             'transform': dst_transform,
             'width': dst_width,
             'height': dst_height,
-            'dtype': 'float32',  # Adjust if needed
+            'dtype': out_dtype,
         })
 
         # Reproject the cropped data
-        destination = np.empty((dst_height, dst_width), dtype='float32')
+        destination = np.empty((dst_height, dst_width), dtype=out_dtype)
         rasterio.warp.reproject(
-            source=data,
+            source=data.astype(out_dtype),
             destination=destination,
             src_transform=window_transform,
             src_crs=src.crs,
             dst_transform=dst_transform,
             dst_crs=new_crs,
-            resampling=rasterio.warp.Resampling.nearest
+            resampling=rasterio.warp.Resampling.nearest,
+            src_nodata=src_nodata,
+            dst_nodata=src_nodata,
         )
 
         # Write to output raster
