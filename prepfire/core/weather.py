@@ -183,7 +183,7 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bo
             raise ValueError("CDS API key is required for weather data download")
 
     logger.info("Downloading weather data...")
-    t = gdf[date_column].tolist()
+    t = pd.to_datetime(gdf[date_column]).tolist()
     date_range = [min(t).strftime("%Y-%m-%d"), max(t).strftime("%Y-%m-%d")]
 
     bounds_wgs = gpd.GeoDataFrame({'geometry': [bound_extent_ply]}, crs=bound_crs)

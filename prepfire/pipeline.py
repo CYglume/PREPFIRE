@@ -556,7 +556,7 @@ class PrepFirePipeline:
         
         # Generate the sample points
         generate_sample_ignition_points(
-            bound_geometry=self.bound_extent,
+            bound_geometry=self.bound_extent.geometry.iloc[0],
             bound_crs=self.output_crs, 
             sampletxt_output_filename=self.output_ig_point_list
         )
