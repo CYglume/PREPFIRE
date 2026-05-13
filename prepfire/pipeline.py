@@ -89,6 +89,7 @@ class PrepFirePipeline:
         fire_months: Optional[List[int]] = [5,6,7,8,9,10],
         lcp_resolution: int = 100,
         done_cds_download: bool = False,
+        done_lcp: bool = False,
         livePlantMoist = [60, 90],
         weather_variable: Optional[List[str]] = ['T', 'RH', 'WS', 'DFMC'],
         fire_weather: Optional[str] = None,
@@ -178,6 +179,7 @@ class PrepFirePipeline:
         self.lcp_resolution     = lcp_resolution
         self.lcp_components     = lcp_components
         self.done_cds_download  = done_cds_download
+        self.done_lcp           = done_lcp
         self.weather_variable   = weather_variable
         self.fire_weather       = fire_weather
         self.livePlantMoist     = livePlantMoist
@@ -600,7 +602,14 @@ class PrepFirePipeline:
         print(f"------ Processing landscape data ------")
         if self.buffered_bound_extent is None:
             raise ValueError("Bound extent not defined. Call process_fire_data() first.")
-        
+
+        # Resolve LCP path before any early-exit so self.lcp_file is always set.
+        self.lcp_file = os.path.join(self.processed_data_path, "Final", f"lcp_{self.region}.tif")
+
+        if self.done_lcp or os.path.exists(self.lcp_file):
+            logger.info("LCP file already exists, skipping landscape processing: %s", self.lcp_file)
+            return self
+
         try:
             # Validate input raster files exist
             required_files = [
@@ -645,7 +654,6 @@ class PrepFirePipeline:
                 )
             
             # Build LCP file
-            self.lcp_file = os.path.join(self.processed_data_path, "Final", f"lcp_{self.region}.tif")
             build_lcp_file(
                 input_folder=os.path.join(self.processed_data_path, "Landscape"),
                 output_file=self.lcp_file,
