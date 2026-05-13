@@ -458,7 +458,7 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
 
     # Save results to CSV files
     annual_fire_weather.to_csv(os.path.join(weather_dir, "annual_fire_weather.csv"), index=False)
-    fire_weather.to_csv(os.path.join(weather_dir, "single_fire_weather.csv"), index=False)
+    fire_weather.to_csv(os.path.join(weather_dir, "fire_weather_records.csv"), index=False)
     
     return fire_weather 
 

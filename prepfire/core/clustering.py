@@ -72,7 +72,7 @@ def cluster_fire_weather(fire_weather, min_n=4, max_n=10, weather_variable = ['T
 
     return km
 
-def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_fire_size = "Area_ha", weather_variable = ['T', 'RH', 'WS', 'DFMC']):
+def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_fire_size = "Area_ha", weather_variable = ['T', 'RH', 'WS', 'DFMC'], scenario_tag = None):
     """
     Generate extreme and average weather type summaries from clustered fire weather data.
     
@@ -173,18 +173,10 @@ def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_
     
     # Output Datasets into CSV
     for fname, table in output_table_dict.items():
+        if scenario_tag is not None:
+            fname = f"{fname}_{scenario_tag}"
         outName = os.path.join(weather_dir, f"{fname}.csv")
-        
-        # Check file existence
-        i = 0
-        while os.path.exists(outName):
-            i += 1
-            outName = os.path.join(weather_dir, f"{fname}-{i}.csv")        
-        if i != 0:
-            logger.warning("File exists for %s.csv! Save as %s-%d.csv", fname, fname, i)
-            
-        table.to_csv(outName,
-                     index=False)
+        table.to_csv(outName, index=False)
 
 
         
