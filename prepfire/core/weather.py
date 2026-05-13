@@ -457,10 +457,8 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
     }).reset_index()
 
     # Save results to CSV files
-    annual_fire_weather.to_csv(os.path.join(weather_dir, "annual_fire_weather.csv"), 
-                              sep=';', decimal=',', index=False)    
-    fire_weather.to_csv(os.path.join(weather_dir, "single_fire_weather.csv"), 
-                       sep=';', decimal=',', index=False)
+    annual_fire_weather.to_csv(os.path.join(weather_dir, "annual_fire_weather.csv"), index=False)
+    fire_weather.to_csv(os.path.join(weather_dir, "single_fire_weather.csv"), index=False)
     
     return fire_weather 
 

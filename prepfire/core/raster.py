@@ -277,7 +277,7 @@ def produce_fms(fuel_raster_path, weather_dir, fms_out_dir, liveHerb=60, liveWoo
     else:
         p = int(extreme_percentile)
         weather_files = [
-            (os.path.join(weather_dir, f"p{p}_extreme_weather_types.csv"), "extreme"),
+            (os.path.join(weather_dir, f"p{p}_extreme_weather_types.csv"), f"p{p}_extreme"),
             (os.path.join(weather_dir, "all_mean_weather_types.csv"), "mean"),
         ]
 
