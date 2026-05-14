@@ -8,6 +8,7 @@ The output files are intended for the fire spread simulation in FlamMap algorith
 [![PyPI version](https://img.shields.io/pypi/v/prepfire)](https://pypi.org/project/prepfire/)
 <img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/CYglume/PREPFIRE">
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20083868.svg)](https://doi.org/10.5281/zenodo.20083868)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
 ## Features
@@ -67,26 +68,32 @@ pip install -e ".[test]"
 prepfire_project/
 ├── input_data/
 │   └── region/
-│       ├── fires.shp               # (Required) Vector map for historical fire ignition points
-│       ├── cropping_polygon/       # Optional bounding box for defining the processing area
+│       ├── fires.gpkg              # (Required) Fire ignition points — GeoPackage preferred; .shp also accepted
+│       ├── cropping_polygon/       # Optional bounding polygon for the processing extent (one feature)
 │       └── lcp_Fuel/
 │           ├── elevation.tif       # (Required) File names must match the corresponding string
 │           ├── slope.tif           # (Required) File names must match the corresponding string
 │           ├── aspect.tif          # (Required) File names must match the corresponding string
-│           ├── fuel.tif            # (Required) File names must match the corresponding string
+│           ├── fuel.tif            # (Required) uint8 fuel-model codes; file names must match
 │           ├── canopyCover.tif     # (Required) File names must match the corresponding string
 │           ├── canopyHeight.tif    # (Required) File names must match the corresponding string
 │           ├── cbh.tif             # (Required) File names must match the corresponding string
 │           └── cbd.tif             # (Required) File names must match the corresponding string
 └── Processed_data/
     └── region/
-        ├── Single/
-        ├── Landscape/
-        ├── Ignition/
+        ├── Fires/                  # Spatially filtered fire records (fires_region.gpkg)
+        ├── Landscape/              # Reprojected and resampled landscape layers
+        ├── Ignition/               # Ignition probability surface (ig_kde.tif) and sample points
         ├── Weather/
-        │   └── CDS/
+        │   ├── CDS/                # Raw ERA5-Land monthly NetCDF downloads
+        │   ├── FMS/                # Fuel moisture scenario files (.fms)
+        │   ├── p95_extreme_weather_types.csv   # Single-percentile scenario (extreme_percentile=int)
+        │   ├── all_mean_weather_types.csv
+        │   ├── Extensive_percentile_group_weather_scenarios.csv  # Multi-percentile (extreme_percentile=list)
+        │   └── fire_weather_records.csv        # Per-fire extracted weather
         ├── Final/
-        └── Sim/
+        │   └── lcp_{region}.tif    # Multi-band landscape file (8 bands)
+        └── Sim/                    # Reserved for FlamMap/MTT simulation outputs
 ```
 
 ## Usage
@@ -108,7 +115,7 @@ user_pipeline = prepfire.PrepFirePipeline(
     output_crs="EPSG:3035",         # Optional: Output coordinate system
     col_fire_size="Area_ha",        # Optional: Column name for fire size in hectares
     col_fire_date="Date",           # Optional: Column name for fire dates
-    extreme_percentile=95,          # Optional: Threshold for extreme weather (0-100). can be multiple values, e.g. [30, 60] for average conditions between percentiles
+    extreme_percentile=95,          # Optional: int → single-percentile extreme (e.g. 95 for 95th/5th); list → percentile-group intervals, e.g. [30,60,90] → (0,30],(30,60],(60,90],(90,100]
     lcp_components=[                # Optional: Landscape components for LCP file (Follow the order of landscape file for USGS FlamMap)
         'elevation', 'slope', 'aspect', 'fuel',
         'canopyCover', 'canopyHeight', 'cbh', 'cbd'
@@ -120,7 +127,8 @@ user_pipeline = prepfire.PrepFirePipeline(
     max_clusters=10,                # Optional: Maximum number of weather clusters
     fire_months=[5,6,7,8,9,10],     # Optional: Months to consider for fire season
     lcp_resolution=100,             # Optional: Resolution in meters for LCP raster
-    done_cds_download=False,        # Optional: Whether to skip CDS download procedures
+    done_cds_download=False,        # Optional: Set True to skip ERA5-Land download (merged .nc files already present)
+    done_lcp=False,                 # Optional: Set True to skip landscape processing (lcp_{region}.tif already present)
     livePlantMoist = [60, 90],      # Optional: Two values for setting moisture of [live Herbaceous, live Woody] plants in fms file
     weather_variable = [            # Optional: Variable names in fire weather table for data clustering 
         'T', 'RH', 'WS', 'DFMC'
@@ -151,16 +159,30 @@ The module provides three main functions:
 - `run_prepare`: Incorporate the above two functions to provide a single line function for all processes (use all default values from the package)
 
 The `PrepFirePipeline` class object provides the following methods:
-1. `process_fire_data()`: Load and process fire data from shapefiles
-2. `process_weather_data()`: Process weather data for the region
-3. `generate_weather_types()`: Process and generate weather types from processed data
-4. `generate_ignition_points()`: Generate sample ignition points
-5. `process_landscape()`: Process landscape data for the region
-6. `generate_fmd_and_simpoints()`: Generate FMS and KDE point density files
-- `prepare_simulation()`: Run the complete fire simulation pipeline from 1. to 6.
-- ~~`run_fire_simulations()`: Run fire simulations based on the prepared data (pending implementation)~~
+1. `process_fire_data()`: Load, spatially filter, and save fire ignition records
+2. `process_weather_data()`: Download (or skip) ERA5-Land data, derive weather variables, extract fire weather
+3. `generate_weather_types(scenario_tag=None)`: Cluster fire weather and write scenario CSVs
+4. `generate_ignition_points()`: Generate 500,000 random sample ignition points within the study area
+5. `process_landscape()`: Reproject, resample, and stack all LCP layers into `lcp_{region}.tif`
+6. `generate_fmd_and_simpoints()`: Write `.fms` fuel moisture files and produce the KDE ignition probability surface
+- `prepare_simulation()`: Run the complete pipeline (steps 1–6) in sequence
 
-See function description within each object function to get further information.
+See function description for full parameter configuration.
+
+#### `generate_weather_types` — multi-version scenario outputs
+
+By default each call **overwrites** any existing scenario CSV with the same name. To keep multiple scenario runs side by side, pass a `scenario_tag`:
+
+```python
+# Keep single-percentile and multi-percentile outputs simultaneously
+pipeline.extreme_percentile = 95
+pipeline.generate_weather_types(scenario_tag="p95")
+# → Weather/p95_extreme_weather_types_p95.csv
+
+pipeline.extreme_percentile = [30, 60, 90]
+pipeline.generate_weather_types(scenario_tag="groups")
+# → Weather/Extensive_percentile_group_weather_scenarios_groups.csv
+```
 
 ### CDS API Key
 
@@ -191,23 +213,29 @@ The argument `bound_coords` in `prepfire.PrepFirePipeline` takes care of the ext
    1. Extra extent geometry (`.shp` or `.gpkg`) existing in folder `input_data/region/cropping_polygon/`:
         Use the polygon (must be only one feature in the file) to set the extent for the whole process 
    2. No extra extent set up:
-        Use the whole extent from input data `fire.shp` for the process
+        Use the whole extent from input fire data for the process
 
 ### Fire Weather
-The algorithm collects and compiles fire weather information through the Copernicus Climate Data Store (CDS). If the user has self produced climatic information for weather scenario clustering, fire weather table (.csv) can be provided to the variable `fire_weather` when construcing the `PrepFirePipeline` object.
 
-The CSV table (file path: `path/to/fire_weather.csv`) should at least contains the following data structure:
-| Date | Fire_size_in_ha | Temperature | RH | Wind_speed | ...
+The pipeline downloads ERA5-Land data via the Copernicus Climate Data Store (CDS) and extracts per-fire weather at each ignition location. The extracted records are saved to `Processed_data/region/Weather/fire_weather_records.csv` (one row per fire event). Two aggregated scenario tables are also saved:
 
-Corresponding column names should be assigned to the object correctly
-```Python
+| `extreme_percentile` type | Output files |
+|---------------------------|--------------|
+| `int` (e.g. `95`) | `p95_extreme_weather_types.csv` + `all_mean_weather_types.csv` |
+| `list` (e.g. `[30, 60, 90]`) | `Extensive_percentile_group_weather_scenarios.csv` |
+
+If you have your own fire weather table, provide it via `fire_weather` to skip ERA5 extraction entirely:
+
+```python
 prepfire.PrepFirePipeline(
     col_fire_size    = "Fire_size_in_ha",
     col_fire_date    = "Date",
     weather_variable = ['Temperature', 'RH', 'Wind_speed'],
-    fire_weather     = "path/to/fire_weather.csv"
+    fire_weather     = "path/to/fire_weather.csv"   # bypasses CDS download and extraction
 )
 ```
+
+The CSV must contain at minimum one column for fire date, one for fire size in hectares, and columns matching `weather_variable`.
 
 ## Testing
 
@@ -239,7 +267,33 @@ pytest tests/ -v -x           # Stop on first failure (useful for debugging)
 
 A successful run prints green `PASSED` for each test. If a test fails, pytest shows the exact assertion and traceback to help locate the issue.
 
-**Local build test:** To verify the full build-and-install cycle locally, see the scripts in [`scripts/`](scripts/) (`local_build_test.sh` for Linux/macOS/Git Bash, `local_build_test.bat` for Windows).
+**Local build test:** To verify the full build-and-install cycle of the development version (e.g., when the PyPI release has not yet caught up with recent changes), run the script for your platform from the repository root:
+
+**Windows (Command Prompt):**
+```bat
+scripts\local_build_test.bat
+```
+
+**Linux / macOS / Git Bash:**
+```bash
+bash scripts/local_build_test.sh
+```
+
+> **Prerequisites:** `python` must be on your `PATH` and the repository must be cloned locally (`git clone https://github.com/CYglume/PREPFIRE.git`).
+
+The script performs the following steps automatically:
+
+| Step | Action |
+|------|--------|
+| 1 | Creates a clean `.venv_test` virtual environment |
+| 2 | Upgrades `pip` and installs the `build` backend |
+| 3 | Builds the wheel (`python -m build`) and prints the output filenames |
+| 4 | Installs the built `.whl` into the test environment |
+| 5 | Imports `prepfire` and all sub-modules from outside the source tree, printing the installed version |
+| 6 | Calls `setup_project_structure()` in a temporary directory to verify the project scaffold |
+| 7 | Removes `.venv_test` and the temporary directory |
+
+A passing run ends with `=== BUILD AND INSTALL TEST PASSED ===`. Any import error or missing dependency is surfaced at step 5.
 
 **Cleanup:** Testing generates cache files that are safe to delete:
 

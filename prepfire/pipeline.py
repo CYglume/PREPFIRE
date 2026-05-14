@@ -89,6 +89,7 @@ class PrepFirePipeline:
         fire_months: Optional[List[int]] = [5,6,7,8,9,10],
         lcp_resolution: int = 100,
         done_cds_download: bool = False,
+        done_lcp: bool = False,
         livePlantMoist = [60, 90],
         weather_variable: Optional[List[str]] = ['T', 'RH', 'WS', 'DFMC'],
         fire_weather: Optional[str] = None,
@@ -178,6 +179,7 @@ class PrepFirePipeline:
         self.lcp_resolution     = lcp_resolution
         self.lcp_components     = lcp_components
         self.done_cds_download  = done_cds_download
+        self.done_lcp           = done_lcp
         self.weather_variable   = weather_variable
         self.fire_weather       = fire_weather
         self.livePlantMoist     = livePlantMoist
@@ -277,13 +279,14 @@ class PrepFirePipeline:
         
         # Create subdirectories for different processing stages
         subdirs = [
-            "Single",          # For single fire processing
+            "Fires",           # For processed fire records
             "Landscape",       # For landscape data
-            "Ignition",        # For ignition points
+            "Ignition",        # For ignition points and KDE surface
             "Weather",         # For weather data
             os.path.join("Weather", "CDS"),  # For raw CDS data
-            "Final",          # For final output files
-            "Sim"             # For simulation results
+            os.path.join("Weather", "FMS"),  # For fuel moisture scenario files
+            "Final",           # For final output files (LCP)
+            "Sim",             # For simulation results
         ]
         
         for subdir in subdirs:
@@ -368,7 +371,7 @@ class PrepFirePipeline:
             self.fires_gdf = self.fires_gdf.drop(columns='fid')
         
         # Save processed fire data
-        output_path = os.path.join(self.processed_data_path, "Ignition", "fires_region.gpkg")
+        output_path = os.path.join(self.processed_data_path, "Fires", "fires_region.gpkg")
         self.fires_gdf.to_file(output_path, index=False)
         logger.info(f"Processed {len(self.fires_gdf)} fires")
         
@@ -458,13 +461,21 @@ class PrepFirePipeline:
             
         return self
     
-    def generate_weather_types(self):
+    def generate_weather_types(self, scenario_tag=None):
         """
         Process and generate weather types from processed data.
-        
+
+        Parameters
+        ----------
+        scenario_tag : str, optional
+            When provided, appended to all output CSV filenames
+            (e.g., ``scenario_tag="v2"`` → ``p95_extreme_weather_types_v2.csv``).
+            Use this to keep parallel scenario outputs without overwriting an earlier
+            run.  Default (``None``) overwrites any existing files with the same name.
+
         This method performs clustering on the fire weather data to identify distinct
         weather patterns, and generates extreme and mean weather type summaries.
-        
+
         Returns
         -------
         self : PrepFirePipeline
@@ -517,7 +528,8 @@ class PrepFirePipeline:
                 km=self.km_model,
                 extreme_percentile=self.extreme_percentile,
                 col_fire_size=self.col_fire_size,
-                weather_variable=self.weather_variable
+                weather_variable=self.weather_variable,
+                scenario_tag=scenario_tag,
             )
             
             logger.info(f"Weather type generation completed successfully with {self.km_model.n_clusters} clusters")
@@ -556,7 +568,7 @@ class PrepFirePipeline:
         
         # Generate the sample points
         generate_sample_ignition_points(
-            bound_geometry=self.bound_extent,
+            bound_geometry=self.bound_extent.geometry.iloc[0],
             bound_crs=self.output_crs, 
             sampletxt_output_filename=self.output_ig_point_list
         )
@@ -590,7 +602,14 @@ class PrepFirePipeline:
         print(f"------ Processing landscape data ------")
         if self.buffered_bound_extent is None:
             raise ValueError("Bound extent not defined. Call process_fire_data() first.")
-        
+
+        # Resolve LCP path before any early-exit so self.lcp_file is always set.
+        self.lcp_file = os.path.join(self.processed_data_path, "Final", f"lcp_{self.region}.tif")
+
+        if self.done_lcp or os.path.exists(self.lcp_file):
+            logger.info("LCP file already exists, skipping landscape processing: %s", self.lcp_file)
+            return self
+
         try:
             # Validate input raster files exist
             required_files = [
@@ -635,7 +654,6 @@ class PrepFirePipeline:
                 )
             
             # Build LCP file
-            self.lcp_file = os.path.join(self.processed_data_path, "Final", "lcp_.tif")
             build_lcp_file(
                 input_folder=os.path.join(self.processed_data_path, "Landscape"),
                 output_file=self.lcp_file,
@@ -673,11 +691,11 @@ class PrepFirePipeline:
         """
         # Create output directories
         print(f"------ Generating .fms and ignition points KDE ------")
-        os.makedirs(os.path.join(self.weather_dir, "fms"), exist_ok=True)
-        
+        os.makedirs(os.path.join(self.weather_dir, "FMS"), exist_ok=True)
+
         # Produce FMS files
         fuel_raster = os.path.join(self.processed_data_path, "Landscape", "fuel.tif")
-        fms_dir = os.path.join(self.weather_dir, "fms")
+        fms_dir = os.path.join(self.weather_dir, "FMS")
         
         produce_fms(
             fuel_raster_path=fuel_raster,

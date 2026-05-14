@@ -183,7 +183,7 @@ def download_weather_data(gdf, date_column, processed_path, bound_extent_ply, bo
             raise ValueError("CDS API key is required for weather data download")
 
     logger.info("Downloading weather data...")
-    t = gdf[date_column].tolist()
+    t = pd.to_datetime(gdf[date_column]).tolist()
     date_range = [min(t).strftime("%Y-%m-%d"), max(t).strftime("%Y-%m-%d")]
 
     bounds_wgs = gpd.GeoDataFrame({'geometry': [bound_extent_ply]}, crs=bound_crs)
@@ -457,10 +457,8 @@ def extract_fire_weather(fires_gdf_wgs, weather_dir, date_column='Date', year_co
     }).reset_index()
 
     # Save results to CSV files
-    annual_fire_weather.to_csv(os.path.join(weather_dir, "annual_fire_weather.csv"), 
-                              sep=';', decimal=',', index=False)    
-    fire_weather.to_csv(os.path.join(weather_dir, "single_fire_weather.csv"), 
-                       sep=';', decimal=',', index=False)
+    annual_fire_weather.to_csv(os.path.join(weather_dir, "annual_fire_weather.csv"), index=False)
+    fire_weather.to_csv(os.path.join(weather_dir, "fire_weather_records.csv"), index=False)
     
     return fire_weather 
 
