@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-15
+### Added
+- `PrepFirePipeline` — `done_lcp` parameter: when `True` (or when `lcp_{region}.tif` already exists), `process_landscape()` skips all raster-reproject operations; consistent design with `done_cds_download`
+- `generate_weather_types` — `scenario_tag` parameter: optional string appended to all output CSV filenames (e.g. `scenario_tag="v2"` → `p95_extreme_weather_types_v2.csv`); replaces the previous meaningless `-1.csv` / `-2.csv` suffix loop
+- Output directory `Processed_data/<region>/Fires/` for processed fire records
+- Output directory `Processed_data/<region>/Weather/FMS/` pre-created by directory structure setup
+
+### Changed
+- `download_weather_data`: date column coerced via `pd.to_datetime()` before `.strftime()` — fixes `AttributeError` when reading fire records from ESRI Shapefile (which stores dates as strings)
+- `generate_ignition_points`: passes `self.bound_extent.geometry.iloc[0]` (Shapely object) instead of the GeoDataFrame — fixes `Unknown geometry type: 'featurecollection'` error
+- `process_raster`: integer source dtypes (e.g. `uint8` fuel codes) are now preserved as-is; float dtypes normalised to `float32`; `src_nodata`/`dst_nodata` passed through to `rasterio.warp.reproject()`
+- `extract_fire_weather`: output CSV renamed from `single_fire_weather.csv` to `fire_weather_records.csv`
+- LCP output filename changed from `lcp_.tif` to `lcp_{region}.tif`
+- FMS output directory capitalised from `fms/` to `FMS/` for consistency with sibling folders
+- `output_weather_types`: removed stale-file suffix loop; default behaviour is now to overwrite on re-runs
+
+### Fixed
+- `fires_region.gpkg` saved to `Fires/` instead of `Ignition/` (semantically correct location)
+- Removed unused `Single/` folder from directory structure setup
+
+### Docs
+- README project structure tree updated: removed `Single/`, added `Fires/` and `Weather/FMS/`, corrected output filenames and `lcp_{region}.tif`
+- README `PrepFirePipeline` example updated with `done_lcp` and `scenario_tag` parameters
+- README Pipeline Methods section rewritten with accurate per-method summaries and `scenario_tag` usage example
+- README Fire Weather section updated to document `fire_weather_records.csv` and scenario output table
+- README Testing section expanded with explicit commands for Windows and Linux/macOS local build test scripts
+
 ## [0.1.1] - 2026-05-08
 
 ### Changed
