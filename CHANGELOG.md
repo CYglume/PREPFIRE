@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- [CITATION.cff](CITATION.cff): maintain the Zenodo citation format everytime new releases are made and linked to Zenodo.
+
+### Changed
+- `clustering.py` — scenario frequency output reorganised for consistency across both output pathways:
+  - `_cluster_freqs()` extracted as a dedicated internal helper returning `freq_cluster` (count-based) and `freq_cluster_area` (area-weighted) per cluster
+  - Wind direction frequencies now split into `freq_wdir` (count-based) and `freq_wdir_area` (burnt-area-weighted) in `weatherSceneFreq()` for both the `int` and `list/tuple` percentile paths
+  - Joint scenario frequencies `freq_scenario` and `freq_scenario_area` now computed as the product of the respective cluster and wind direction frequencies in both `addWindDir()` (single-percentile path) and the extensive percentile group path, ensuring symmetric output columns across all output tables
+
 ## [0.1.2] - 2026-05-15
 ### Added
 - `PrepFirePipeline` — `done_lcp` parameter: when `True` (or when `lcp_{region}.tif` already exists), `process_landscape()` skips all raster-reproject operations; consistent design with `done_cds_download`
