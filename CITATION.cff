@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Yang"
+    given-names: "Cheng-Ying"
+  - family-names: "Rodrigues Mimbrero"
+    given-names: "Marcos"
+title: "PREPFIRE: An Open-Source Framework for Automated Fire Simulation Input Preparation"
+version: "0.1.2"
+doi: "10.5281/zenodo.20083868"
+date-released: "2026-05-15"
+abstract: >
+  PREPFIRE (PREParation for FIRE simulation) is a Python package for preparing
+  materials for fire simulation and analysis, providing tools for processing fire
+  data, weather conditions, and landscape characteristics. The package implements
+  a complete pipeline for fire risk assessment and simulation. Output files are
+  intended for fire spread simulation using the FlamMap algorithm.
+keywords:
+  - fire-simulation
+  - wildfire
+  - fire-weather
+  - ERA5
+  - FlamMap
+  - landscape
+  - automation
+  - open-source
+license: "GPL-3.0-only"
+repository-code: "https://github.com/CYglume/PREPFIRE"
+url: "https://github.com/CYglume/PREPFIRE"
