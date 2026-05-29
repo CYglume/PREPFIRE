@@ -94,6 +94,7 @@ class PrepFirePipeline:
         weather_variable: Optional[List[str]] = ['T', 'RH', 'WS', 'DFMC'],
         fire_weather: Optional[str] = None,
         log_level: str = 'INFO',
+        random_state: Optional[int] = None,
     ):
         """
         Initialize the PREPFIRE pipeline.
@@ -156,6 +157,11 @@ class PrepFirePipeline:
         fire_weather: path to csv file for fire weather input, optional
             Table should contain fire size information (column name: col_fire_size) and fire weather extraction at starting date.
             Weather column should contain variables stated in `weather_variable`
+        random_state : int, optional
+            Seed for the random number generator used by `generate_ignition_points()`.
+            Passed to both `GeoSeries.sample_points(rng=)` and the post-explode shuffle,
+            so the same seed produces identical point sets across runs.
+            Default ``None`` gives a different draw each run.
 
         Raises
         ------
@@ -183,6 +189,7 @@ class PrepFirePipeline:
         self.weather_variable   = weather_variable
         self.fire_weather       = fire_weather
         self.livePlantMoist     = livePlantMoist
+        self.random_state       = random_state
         
         # Set root directory
         self.root_dir = root_dir if root_dir else os.getcwd()
@@ -569,8 +576,9 @@ class PrepFirePipeline:
         # Generate the sample points
         generate_sample_ignition_points(
             bound_geometry=self.bound_extent.geometry.iloc[0],
-            bound_crs=self.output_crs, 
-            sampletxt_output_filename=self.output_ig_point_list
+            bound_crs=self.output_crs,
+            sampletxt_output_filename=self.output_ig_point_list,
+            random_state=self.random_state,
         )
         
         # Validate output file was created

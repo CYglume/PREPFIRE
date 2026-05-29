@@ -190,7 +190,7 @@ def output_weather_types(fire_weather, weather_dir, km, extreme_percentile, col_
         
     logger.info("--> Weather data done")
 
-def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_filename, out_crs = None, num_points = 500000):
+def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_filename, out_crs = None, num_points = 500000, random_state = None):
     """
     Generates random ignition points strictly within the *actual geometry* of a boundary layer
     (Polygon or MultiPolygon) and exports them to a CSV file.
@@ -210,6 +210,11 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
     num_points : int, optional
         The total number of random points to generate *within the actual boundary*.
         Defaults to 500,000.
+    random_state : int or None, optional
+        Seed for the random number generator. Passed to both `sample_points(rng=)`
+        (GeoPandas >= 0.14) and the post-explode shuffle `DataFrame.sample(random_state=)`.
+        Use an integer for reproducible output; `None` (default) gives a different
+        point set each run.
 
     Returns
     -------
@@ -257,7 +262,7 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
         # for the corresponding input geometry.
         # sampled_points_multipoint_series = bound_geometry.geometry.sample_points(num_points)
         gdf_boundary = gpd.GeoDataFrame(geometry=[bound_geometry], crs=bound_crs)
-        foo_multipoint_series = gdf_boundary.geometry.sample_points(500000)
+        foo_multipoint_series = gdf_boundary.geometry.sample_points(num_points, rng=random_state)
 
     except Exception as e:
         logger.error("Error generating points with sample_points(): %s", e)
@@ -266,11 +271,13 @@ def generate_sample_ignition_points(bound_geometry, bound_crs, sampletxt_output_
         return
 
 
-    # Create GeoDataFrame with points
+    # Create GeoDataFrame with points and shuffle to remove spatial ordering
+    # introduced by sample_points(), which traverses the bounding box
+    # left-to-right internally and produces a west-to-east sorted MultiPoint.
     gdf_points = gpd.GeoDataFrame(
         geometry=foo_multipoint_series.explode(ignore_index=True),
         crs=bound_crs
-    )
+    ).sample(frac=1, random_state=random_state).reset_index(drop=True)
 
     # Check if fewer points than requested were generated
     if len(gdf_points) < num_points:

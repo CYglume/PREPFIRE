@@ -9,12 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - [CITATION.cff](CITATION.cff): maintain the Zenodo citation format everytime new releases are made and linked to Zenodo.
+- `random_state` parameter to `generate_sample_ignition_points()` (and surfaced through `PrepFirePipeline.__init__`). Passed to both `GeoSeries.sample_points(rng=)` and the post-explode shuffle `DataFrame.sample(random_state=)`, so a single integer seed reproduces identical point sets across runs. Default `None` retains the previous non-deterministic behaviour.
 
 ### Changed
 - `clustering.py` — scenario frequency output reorganised for consistency across both output pathways:
   - `_cluster_freqs()` extracted as a dedicated internal helper returning `freq_cluster` (count-based) and `freq_cluster_area` (area-weighted) per cluster
   - Wind direction frequencies now split into `freq_wdir` (count-based) and `freq_wdir_area` (burnt-area-weighted) in `weatherSceneFreq()` for both the `int` and `list/tuple` percentile paths
   - Joint scenario frequencies `freq_scenario` and `freq_scenario_area` now computed as the product of the respective cluster and wind direction frequencies in both `addWindDir()` (single-percentile path) and the extensive percentile group path, ensuring symmetric output columns across all output tables
+
+### Fixed
+- `generate_sample_ignition_points()`: output ignition points were ordered approximately west-to-east in the CSV. `GeoSeries.sample_points()` traverses the bounding box left-to-right internally, and `explode()` preserves that spatial ordering in the resulting GeoDataFrame. Points are now shuffled with `DataFrame.sample(frac=1)` after `explode()`, restoring true spatial randomness.
+- `generate_sample_ignition_points()`: the `num_points` parameter was silently ignored; the function hardcoded `500000` regardless of the caller-supplied value. Now uses `num_points` as intended.
 
 ## [0.1.2] - 2026-05-15
 ### Added

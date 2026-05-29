@@ -134,7 +134,8 @@ user_pipeline = prepfire.PrepFirePipeline(
         'T', 'RH', 'WS', 'DFMC'
     ],
     fire_weather  = None,           # Optional: Path to an external csv for fire weather information (Only used if skipping CDS download)
-    log_level="INFO"                # Optional: Logging level
+    log_level="INFO",               # Optional: Logging level
+    random_state=None,              # Optional: Integer seed for reproducible ignition point generation
 )
 
 # Start running the process of the pipeline object
@@ -162,7 +163,7 @@ The `PrepFirePipeline` class object provides the following methods:
 1. `process_fire_data()`: Load, spatially filter, and save fire ignition records
 2. `process_weather_data()`: Download (or skip) ERA5-Land data, derive weather variables, extract fire weather
 3. `generate_weather_types(scenario_tag=None)`: Cluster fire weather and write scenario CSVs
-4. `generate_ignition_points()`: Generate 500,000 random sample ignition points within the study area
+4. `generate_ignition_points()`: Generate uniformly random ignition points (default 500,000) within the study boundary. Points are spatially shuffled to remove the west-to-east ordering that `GeoSeries.sample_points()` introduces internally. Pass `random_state` to the pipeline for reproducible output.
 5. `process_landscape()`: Reproject, resample, and stack all LCP layers into `lcp_{region}.tif`
 6. `generate_fmd_and_simpoints()`: Write `.fms` fuel moisture files and produce the KDE ignition probability surface
 - `prepare_simulation()`: Run the complete pipeline (steps 1–6) in sequence
